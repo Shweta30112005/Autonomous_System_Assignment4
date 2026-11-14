@@ -1,232 +1,289 @@
 """
-Part 2: First-Price Sealed-Bid Auction Simulation
-=================================================
-Bidder 1 deviates from equilibrium by bidding k*v1.
-The other (n-1) bidders bid equilibrium: ((n-1)/n)*vi, vi ~ Uniform[0,1].
-We simulate across k ∈ {0.1, 0.2, ..., 2.0} and n ∈ {2, 3, 4}.
+Part 2: First-Price Sealed-Bid Auction Simulation & Equilibrium Deviation
+=========================================================================
+Autonomous Systems - Assignment 4
+Authors: Akanksha Singh (B23CM1005), Shweta Mandal (B23CM1037)
+
+Evaluates first-price sealed-bid auctions with n bidders (n in {2, 3, 4}).
+Bidder 1 deviates from equilibrium by bidding b1 = k * v1, where k in [0.1, 2.0].
+The remaining (n - 1) rival bidders adhere to the symmetric risk-neutral
+Bayesian Nash Equilibrium (BNE) strategy: bi = ((n - 1) / n) * vi.
+
+Key Metrics Evaluated:
+  1. Expected utility of Bidder 1 vs deviation factor k (empirical vs analytical).
+  2. Verification that k* = (n - 1) / n maximises expected utility.
+  3. Fraction of auctions where the winner could have paid less and still won.
+  4. Average overpayment margin (money left on the table / winner's regret).
 """
+
+import os
+import tempfile
+
+# Prevent matplotlib cache warning
+os.environ.setdefault("MPLCONFIGDIR", tempfile.gettempdir())
 
 import numpy as np
 import matplotlib
-matplotlib.use("Agg")  # non-interactive backend — no display needed
+matplotlib.use("Agg")
 import matplotlib.pyplot as plt
-import os
 
 # Reproducibility
 np.random.seed(42)
 
 NUM_AUCTIONS = 100_000
 N_VALUES = [2, 3, 4]
-K_VALUES = np.round(np.arange(0.1, 2.01, 0.1), 2)  # 0.1, 0.2, ..., 2.0  (20 values)
+BASE_GRID = np.round(np.arange(0.1, 2.01, 0.05), 2)
 PLOTS_DIR = "plots"
 
 
-def simulate_first_price(n: int, k: float) -> tuple[float, float]:
-    """
-    Simulate NUM_AUCTIONS first-price auctions.
+def ensure_plots_dir():
+    os.makedirs(PLOTS_DIR, exist_ok=True)
 
-    Bidder 1: b1 = k * v1,  v1 ~ Uniform[0,1]
-    Rivals  : bi = ((n-1)/n) * vi,  vi ~ Uniform[0,1]
 
-    Returns
-    -------
-    avg_utility   : mean utility of bidder 1 across all auctions
-    overpaid_frac : fraction of *winning* auctions where bidder 1 overpaid
-                    (i.e. max rival bid < b1, so a lower bid would still win)
-    """
+def theoretical_utility(k: float, n: int) -> float:
+    """Closed-form theoretical expected utility of Bidder 1 bidding k*v1."""
+    eq_k = (n - 1) / n
+    if k >= 1.0:
+        return (1.0 - k) * (1.0 / (n + 1))
+    if k <= eq_k:
+        return ((1.0 - k) / (n + 1.0)) * ((n * k / (n - 1.0)) ** (n - 1))
+    else:
+        v_grid = np.linspace(0.0, 1.0, 10_000)
+        win_prob = np.minimum(1.0, (n * k * v_grid / (n - 1.0)) ** (n - 1))
+        integrand = v_grid * (1.0 - k) * win_prob
+        return float(np.trapezoid(integrand, v_grid))
+
+
+def simulate_first_price(n: int, k: float) -> dict:
+    """Simulate NUM_AUCTIONS auctions for given n and deviation factor k."""
     eq_factor = (n - 1) / n
 
-    # Bidder 1
-    v1 = np.random.uniform(0, 1, NUM_AUCTIONS)
+    v1 = np.random.uniform(0.0, 1.0, NUM_AUCTIONS)
     b1 = k * v1
 
-    # Rivals: shape (NUM_AUCTIONS, n-1)
-    rival_v = np.random.uniform(0, 1, (NUM_AUCTIONS, n - 1))
+    rival_v = np.random.uniform(0.0, 1.0, (NUM_AUCTIONS, n - 1))
     rival_b = eq_factor * rival_v
 
-    # Highest rival bid per auction
     max_rival = rival_b.max(axis=1)
 
-    # Bidder 1 wins when b1 > max_rival
-    wins = b1 > max_rival
+    win_strict = b1 > max_rival
+    tie = np.isclose(b1, max_rival, atol=1e-6)
+    win_mask = win_strict | (tie & (np.random.uniform(0.0, 1.0, NUM_AUCTIONS) < 0.5))
 
-    # Utility: v1*(1-k) if win, else 0
-    utility = np.where(wins, v1 * (1 - k), 0.0)
-    avg_utility = utility.mean()
+    utility = np.where(win_mask, v1 * (1.0 - k), 0.0)
+    avg_utility = float(utility.mean())
+    win_prob = float(win_mask.mean())
 
-    # Overpaid fraction among wins
-    winning_auctions = wins.sum()
-    if winning_auctions == 0:
-        overpaid_frac = np.nan
+    num_wins = int(win_mask.sum())
+    if num_wins > 0:
+        overpaid_b1 = (b1[win_mask] > max_rival[win_mask]).sum()
+        frac_b1_overpaid = float(overpaid_b1 / num_wins)
+        regret_b1 = float((b1[win_mask] - max_rival[win_mask]).mean())
     else:
-        # Overpaid iff bidder 1 won but max_rival < b1 (always true when they win
-        # by strict inequality, but we want to count cases where they could have
-        # lowered their bid and still won — i.e. max_rival < b1)
-        overpaid = (max_rival[wins] < b1[wins]).sum()
-        overpaid_frac = overpaid / winning_auctions
+        frac_b1_overpaid = np.nan
+        regret_b1 = 0.0
 
-    return avg_utility, overpaid_frac
+    all_bids = np.column_stack([b1, rival_b])
+    sorted_all_bids = np.sort(all_bids, axis=1)
+    highest_bid = sorted_all_bids[:, -1]
+    second_highest_bid = sorted_all_bids[:, -2]
+
+    overall_could_pay_less = (highest_bid > second_highest_bid).mean()
+    overall_regret = float((highest_bid - second_highest_bid).mean())
+
+    return {
+        "avg_utility": avg_utility,
+        "win_prob": win_prob,
+        "frac_b1_overpaid": frac_b1_overpaid,
+        "overall_frac_overpaid": float(overall_could_pay_less),
+        "regret_b1": regret_b1,
+        "overall_regret": overall_regret,
+    }
 
 
-def run_simulation() -> dict:
-    """Run all (n, k) combinations and collect results."""
+def run_experiment():
+    """Run full simulation suite across all n in {2, 3, 4}."""
+    ensure_plots_dir()
     results = {}
+
     for n in N_VALUES:
-        print(f"  Simulating n={n} ...", flush=True)
-        utilities = []
-        overpaid_fracs = []
-        for k in K_VALUES:
-            avg_u, op_frac = simulate_first_price(n, k)
-            utilities.append(avg_u)
-            overpaid_fracs.append(op_frac)
+        eq_k = (n - 1) / n
+        k_grid = np.unique(np.sort(np.concatenate([BASE_GRID, [eq_k]])))
+        print(f"\n[Simulating n = {n} Bidders] (Theoretical BNE k* = {eq_k:.4f})")
+
+        u_list, win_list, op_b1_list, op_all_list = [], [], [], []
+        regret_b1_list, regret_all_list, theo_u_list = [], [], []
+
+        for k in k_grid:
+            metrics = simulate_first_price(n, k)
+            theo_u = theoretical_utility(k, n)
+
+            u_list.append(metrics["avg_utility"])
+            win_list.append(metrics["win_prob"])
+            op_b1_list.append(metrics["frac_b1_overpaid"])
+            op_all_list.append(metrics["overall_frac_overpaid"])
+            regret_b1_list.append(metrics["regret_b1"])
+            regret_all_list.append(metrics["overall_regret"])
+            theo_u_list.append(theo_u)
+
         results[n] = {
-            "utilities": np.array(utilities),
-            "overpaid_fracs": np.array(overpaid_fracs),
+            "k_grid": k_grid,
+            "utilities": np.array(u_list),
+            "theoretical_u": np.array(theo_u_list),
+            "win_probs": np.array(win_list),
+            "op_b1": np.array(op_b1_list),
+            "op_all": np.array(op_all_list),
+            "regret_b1": np.array(regret_b1_list),
+            "regret_all": np.array(regret_all_list),
+            "eq_k": eq_k,
         }
-        print(
-            f"    n={n}: eq k={(n-1)/n:.3f}, "
-            f"utility at eq={results[n]['utilities'][round((n-1)/n*10)-1]:.5f}",
-            flush=True,
-        )
+
+        best_idx = np.argmax(results[n]["utilities"])
+        best_k = k_grid[best_idx]
+        best_u = results[n]["utilities"][best_idx]
+        eq_idx = np.argmin(np.abs(k_grid - eq_k))
+        eq_u = results[n]["utilities"][eq_idx]
+
+        print(f"  n={n}: Simulated peak at k = {best_k:.4f} (u = {best_u:.5f}) | "
+              f"BNE k = {eq_k:.4f} (u = {eq_u:.5f})")
+        print(f"  Fraction of auctions winner could have paid less: {results[n]['op_all'][eq_idx]*100:.2f}%")
+        print(f"  Average overpayment margin at BNE: {results[n]['regret_all'][eq_idx]:.4f}")
+
     return results
 
 
 # ---------------------------------------------------------------------------
-# Plotting helpers
+# Plotting Routines
 # ---------------------------------------------------------------------------
 
-def _add_vlines(ax: plt.Axes, n: int) -> None:
-    """Add vertical lines for k=1 and equilibrium k=(n-1)/n."""
-    eq_k = (n - 1) / n
-    ax.axvline(x=1.0, color="gray", linestyle="--", linewidth=1.2,
-               label="k=1 (truthful)")
-    ax.axvline(x=eq_k, color="red", linestyle="-.", linewidth=1.2,
-               label=f"k={eq_k:.3f} (eq.)")
-    ax.legend(fontsize=7, loc="upper right")
-
-
-def plot_utility(results: dict, path: str) -> None:
-    fig, axes = plt.subplots(1, 3, figsize=(14, 4), sharey=False)
-    fig.suptitle("Part 2 — First-Price Auction: Expected Utility vs k", fontsize=13)
+def plot_utility(results: dict):
+    """Plot Expected Utility vs k for n in {2, 3, 4}."""
+    fig, axes = plt.subplots(1, 3, figsize=(16, 4.8), sharey=False)
+    fig.suptitle("Part 2: First-Price Auction — Expected Utility of Bidder 1 vs Scaling Factor $k$\n"
+                 "Bidder 1 bids $b_1 = k \\cdot v_1$; Rivals bid equilibrium $b_i = \\frac{n-1}{n} v_i$",
+                 fontsize=13, fontweight="bold", y=1.02)
 
     for ax, n in zip(axes, N_VALUES):
-        utils = results[n]["utilities"]
-        ax.plot(K_VALUES, utils, "b-o", markersize=4, linewidth=1.5)
-        _add_vlines(ax, n)
-        # Mark maximum
-        best_idx = np.argmax(utils)
-        ax.scatter(K_VALUES[best_idx], utils[best_idx], color="green",
-                   zorder=5, s=60, label=f"max at k={K_VALUES[best_idx]:.1f}")
-        ax.legend(fontsize=7, loc="upper right")
-        ax.set_title(f"n = {n}", fontsize=11)
-        ax.set_xlabel("k (bid scaling factor)", fontsize=9)
-        ax.set_ylabel("Average Utility of Bidder 1", fontsize=9)
-        ax.grid(True, alpha=0.3)
+        k_vals = results[n]["k_grid"]
+        u_sim = results[n]["utilities"]
+        u_theo = results[n]["theoretical_u"]
+        eq_k = results[n]["eq_k"]
 
-    fig.tight_layout()
-    fig.savefig(path, dpi=150, bbox_inches="tight")
-    plt.close(fig)
-    print(f"  Saved: {path}")
+        best_idx = np.argmax(u_sim)
+        best_k = k_vals[best_idx]
+        best_u = u_sim[best_idx]
 
+        ax.plot(k_vals, u_sim, "o-", color="#1f77b4", markersize=3.5, linewidth=1.8, label="Simulated Utility")
+        ax.plot(k_vals, u_theo, "--", color="#2ca02c", linewidth=1.5, label="Theoretical BNE Curve")
 
-def plot_overpaid(results: dict, path: str) -> None:
-    fig, axes = plt.subplots(1, 3, figsize=(14, 4), sharey=False)
-    fig.suptitle("Part 2 — First-Price Auction: Fraction Bidder 1 Overpaid (given win)", fontsize=12)
+        ax.axvline(eq_k, color="crimson", linestyle="-.", linewidth=1.8,
+                   label=f"BNE $k^*={eq_k:.3f}$ ($u={theoretical_utility(eq_k, n):.4f}$)")
+        ax.axvline(1.0, color="gray", linestyle=":", linewidth=1.5, label="Truthful $k=1.0$ ($u=0$)")
+        ax.scatter([best_k], [best_u], color="darkorange", s=70, zorder=5,
+                   label=f"Sim Peak $k={best_k:.2f}$")
 
-    for ax, n in zip(axes, N_VALUES):
-        op = results[n]["overpaid_fracs"]
-        ax.plot(K_VALUES, op, "m-s", markersize=4, linewidth=1.5)
-        _add_vlines(ax, n)
-        ax.set_title(f"n = {n}", fontsize=11)
-        ax.set_xlabel("k (bid scaling factor)", fontsize=9)
-        ax.set_ylabel("Fraction Overpaid (among wins)", fontsize=9)
-        ax.grid(True, alpha=0.3)
+        ax.set_title(f"$n = {n}$ Bidders (Equilibrium $k^*={eq_k:.3f}$)", fontsize=11, fontweight="bold")
+        ax.set_xlabel("Deviation Factor $k$ ($b_1 = k \\cdot v_1$)", fontsize=9.5)
+        ax.set_ylabel("Expected Utility $\\mathbb{E}[u_1]$", fontsize=9.5)
+        ax.legend(fontsize=8, loc="upper right")
+        ax.grid(True, linestyle="--", alpha=0.4)
+        ax.tick_params(labelsize=8.5)
 
-    fig.tight_layout()
-    fig.savefig(path, dpi=150, bbox_inches="tight")
-    plt.close(fig)
-    print(f"  Saved: {path}")
+    plt.tight_layout()
+    out_path = os.path.join(PLOTS_DIR, "part2_utility.png")
+    plt.savefig(out_path, dpi=300, bbox_inches="tight")
+    plt.close()
+    print(f"  Saved plot: {out_path}")
 
 
-def plot_combined(results: dict, path: str) -> None:
-    fig, axes = plt.subplots(2, 3, figsize=(15, 8))
-    fig.suptitle("Part 2 — First-Price Auction: Combined Summary", fontsize=13)
+def plot_overpaid(results: dict):
+    """Plot overpayment metrics: fraction and regret amount."""
+    fig, axes = plt.subplots(2, 3, figsize=(16, 8.5))
+    fig.suptitle("Part 2: Analysis of 'Winner Could Have Paid Less and Still Won'\n"
+                 "Ex-Post Regret and Overpayment in First-Price Auctions",
+                 fontsize=13, fontweight="bold", y=0.99)
 
     for col_idx, n in enumerate(N_VALUES):
-        utils = results[n]["utilities"]
-        op = results[n]["overpaid_fracs"]
+        k_vals = results[n]["k_grid"]
+        eq_k = results[n]["eq_k"]
 
-        # --- Top row: utility ---
-        ax_u = axes[0, col_idx]
-        ax_u.plot(K_VALUES, utils, "b-o", markersize=4, linewidth=1.5)
-        _add_vlines(ax_u, n)
-        best_idx = np.argmax(utils)
-        ax_u.scatter(K_VALUES[best_idx], utils[best_idx], color="green",
-                     zorder=5, s=60, label=f"max k={K_VALUES[best_idx]:.1f}")
-        ax_u.legend(fontsize=7)
-        ax_u.set_title(f"n={n} — Utility", fontsize=10)
-        ax_u.set_xlabel("k", fontsize=9)
-        ax_u.set_ylabel("Avg Utility", fontsize=9)
-        ax_u.grid(True, alpha=0.3)
+        ax_top = axes[0, col_idx]
+        ax_top.plot(k_vals, results[n]["op_all"], "s-", color="#9467bd", markersize=3.5, linewidth=1.8,
+                    label="All Auctions Winner")
+        ax_top.plot(k_vals, results[n]["op_b1"], "^--", color="#d62728", markersize=3.5, linewidth=1.5,
+                    label="Bidder 1 (given win)")
+        ax_top.axvline(eq_k, color="black", linestyle="-.", linewidth=1.4, label=f"BNE $k={eq_k:.3f}$")
+        ax_top.set_title(f"$n = {n}$: Fraction Winner Could Pay Less", fontsize=10.5, fontweight="bold")
+        ax_top.set_xlabel("Scaling Factor $k$", fontsize=9)
+        ax_top.set_ylabel("Fraction (1.0 = 100%)", fontsize=9)
+        ax_top.set_ylim(0.95, 1.02)
+        ax_top.legend(fontsize=7.5, loc="lower right")
+        ax_top.grid(True, linestyle="--", alpha=0.4)
 
-        # --- Bottom row: overpaid fraction ---
-        ax_o = axes[1, col_idx]
-        ax_o.plot(K_VALUES, op, "m-s", markersize=4, linewidth=1.5)
-        _add_vlines(ax_o, n)
-        ax_o.set_title(f"n={n} — Overpaid Fraction", fontsize=10)
-        ax_o.set_xlabel("k", fontsize=9)
-        ax_o.set_ylabel("Frac. Overpaid", fontsize=9)
-        ax_o.grid(True, alpha=0.3)
+        ax_bot = axes[1, col_idx]
+        ax_bot.plot(k_vals, results[n]["regret_all"], "d-", color="#8c564b", markersize=3.5, linewidth=1.8,
+                    label="Overall $\\mathbb{E}[b_{(1)} - b_{(2)}]$")
+        ax_bot.plot(k_vals, results[n]["regret_b1"], "o--", color="#e377c2", markersize=3.5, linewidth=1.5,
+                    label="Bidder 1 $\\mathbb{E}[b_1 - b_{rival}^{max} \\mid \\mathrm{win}]$")
+        ax_bot.axvline(eq_k, color="black", linestyle="-.", linewidth=1.4, label=f"BNE $k={eq_k:.3f}$")
+        ax_bot.set_title(f"$n = {n}$: Average Overpayment Margin (Regret)", fontsize=10.5, fontweight="bold")
+        ax_bot.set_xlabel("Scaling Factor $k$", fontsize=9)
+        ax_bot.set_ylabel("Money Left on Table ($b_{win} - b_{second}$)", fontsize=9)
+        ax_bot.legend(fontsize=7.5, loc="upper left")
+        ax_bot.grid(True, linestyle="--", alpha=0.4)
 
-    fig.tight_layout()
-    fig.savefig(path, dpi=150, bbox_inches="tight")
-    plt.close(fig)
-    print(f"  Saved: {path}")
+    plt.tight_layout(rect=[0, 0, 1, 0.96])
+    out_path = os.path.join(PLOTS_DIR, "part2_overpaid.png")
+    plt.savefig(out_path, dpi=300, bbox_inches="tight")
+    plt.close()
+    print(f"  Saved plot: {out_path}")
 
 
-# ---------------------------------------------------------------------------
-# Summary report
-# ---------------------------------------------------------------------------
-
-def print_summary(results: dict) -> None:
-    print("\n" + "=" * 60)
-    print("SUMMARY: First-Price Auction Results")
-    print("=" * 60)
+def print_summary(results: dict):
+    """Print academic-grade summary table of Part 2 results."""
+    print("\n" + "=" * 76)
+    print("  PART 2: FIRST-PRICE AUCTION EQUILIBRIUM & OVERPAYMENT SUMMARY")
+    print("=" * 76)
+    print(f"{'n':<4} {'BNE k*':<8} {'Sim Peak k':<11} {'BNE Utility':<13} {'Peak Utility':<13} {'Win % @ BNE':<12} {'Overpayment'}")
+    print("-" * 76)
     for n in N_VALUES:
-        eq_k = (n - 1) / n
-        eq_idx = int(round(eq_k * 10)) - 1  # index in K_VALUES for eq k
-        utils = results[n]["utilities"]
-        op = results[n]["overpaid_fracs"]
-        best_idx = np.argmax(utils)
-        print(f"\nn = {n}  |  Equilibrium k = {eq_k:.4f}")
-        print(f"  k that maximises simulated utility : {K_VALUES[best_idx]:.2f}")
-        print(f"  Utility at equilibrium k           : {utils[eq_idx]:.6f}")
-        print(f"  Utility at best simulated k        : {utils[best_idx]:.6f}")
-        print(f"  Overpaid fraction at equilibrium k : {op[eq_idx]:.4f}")
-        print(f"  Overpaid fraction at k=1 (truthful): {op[K_VALUES.tolist().index(1.0)]:.4f}")
+        k_vals = results[n]["k_grid"]
+        eq_k = results[n]["eq_k"]
+        eq_idx = np.argmin(np.abs(k_vals - eq_k))
+        best_idx = np.argmax(results[n]["utilities"])
+
+        bne_u = results[n]["utilities"][eq_idx]
+        peak_u = results[n]["utilities"][best_idx]
+        bne_k = eq_k
+        peak_k = k_vals[best_idx]
+        win_p = results[n]["win_probs"][eq_idx] * 100.0
+        regret = results[n]["regret_all"][eq_idx]
+
+        print(f"{n:<4} {bne_k:<8.3f} {peak_k:<11.3f} {bne_u:<13.5f} {peak_u:<13.5f} {win_p:<11.1f}% {regret:.4f}")
+    print("=" * 76)
+    print("Key Finding: In 100.0% of winning auctions, the winner pays strictly more")
+    print("than the second-highest bid, demonstrating structural overpayment.")
+    print("=" * 76 + "\n")
 
 
 # ---------------------------------------------------------------------------
-# Main
+# Main Execution
 # ---------------------------------------------------------------------------
 
-def main() -> None:
-    os.makedirs(PLOTS_DIR, exist_ok=True)
+def main():
+    print("=" * 70)
+    print("Part 2: First-Price Auction Simulation & Overpayment Analysis")
+    print("=" * 70)
+    results = run_experiment()
 
-    print("Running Part 2: First-Price Auction Simulation")
-    print(f"  Auctions per combination : {NUM_AUCTIONS:,}")
-    print(f"  k grid                   : {K_VALUES.tolist()}")
-    print(f"  n values                 : {N_VALUES}\n")
-
-    results = run_simulation()
-
-    print("\nGenerating plots ...")
-    plot_utility(results, os.path.join(PLOTS_DIR, "part2_first_price_utility.png"))
-    plot_overpaid(results, os.path.join(PLOTS_DIR, "part2_first_price_overpaid.png"))
-    plot_combined(results, os.path.join(PLOTS_DIR, "part2_combined.png"))
+    print("\n[Generating Plots]")
+    plot_utility(results)
+    plot_overpaid(results)
 
     print_summary(results)
-    print("\nPart 2 complete.")
+    print("Part 2 complete. Plots saved:")
+    print("  - plots/part2_utility.png")
+    print("  - plots/part2_overpaid.png")
 
 
 if __name__ == "__main__":

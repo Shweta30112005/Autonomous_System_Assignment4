@@ -1,353 +1,362 @@
 """
-Part 3: VCG Mechanism for Cheapest Path Auction
-================================================
-Implements the Vickrey-Clarke-Groves (VCG) mechanism for a network path
-auction problem. The goal is to find the cheapest path from A to F and
-compute truthful payments for each edge on the optimal path.
+Part 3: VCG Mechanism for Shortest-Path Procurement Auction
+===========================================================
+Autonomous Systems - Assignment 4
+Authors: Akanksha Singh (B23CM1005), Shweta Mandal (B23CM1037)
 
-Graph (Figure 7.3 style from Nisan et al. / auction theory textbook):
-  Nodes: A, B, C, D, E, F
-  TRUE edge costs: AB=1, AC=4, BD=1, BE=2, CD=1, DE=1, DF=4, EF=1
-  Optimal path: A→B→E→F (cost 4)
+Implements the Vickrey-Clarke-Groves (VCG) mechanism with the Clarke pivot rule
+for purchasing the cheapest path from source node A to destination node F
+in a communication network where each edge is an independent self-interested agent
+possessing a private cost.
 
-VCG Payments (reproduced exactly):
-  AB = 4, BE = 2, EF = 3  (all other edges = 0)
+Based on Figure 7.3 from:
+  Yoav Shoham and Kevin Leyton-Brown,
+  "Multiagent Systems: Algorithmic, Game-Theoretic, and Logical Foundations"
+  Cambridge University Press.
+
+True Edge Costs:
+  AB = 1, AC = 4, BD = 1, BE = 2, CD = 1, DE = 1, DF = 4, EF = 1
+
+Optimal Path:
+  A -> B -> E -> F (Total cost = 1 + 2 + 1 = 4)
+
+Theoretical VCG Payments:
+  p(AB) = 4, p(BE) = 2, p(EF) = 3; all other edges receive 0.
+
+Individual Rationality and Incentive Compatibility:
+  u_e = p_e - c_e^true if edge e is chosen (on optimal path)
+  u_e = 0.0            if edge e is NOT chosen (off optimal path)
 """
 
 import os
+import tempfile
+
+# Prevent matplotlib cache warning
+os.environ.setdefault("MPLCONFIGDIR", tempfile.gettempdir())
+
 import networkx as nx
-import matplotlib
-matplotlib.use('Agg')
-import matplotlib.pyplot as plt
-import matplotlib.patches as mpatches
 import numpy as np
+import matplotlib
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
 
-# ---------------------------------------------------------------------------
-# Graph construction
-# ---------------------------------------------------------------------------
+PLOTS_DIR = "plots"
 
-# TRUE costs (fixed throughout — not revealed to the mechanism)
+# TRUE private costs of all edges (Figure 7.3)
 TRUE_COSTS = {
-    ('A', 'B'): 1,
-    ('A', 'C'): 4,
-    ('B', 'D'): 1,
-    ('B', 'E'): 2,
-    ('C', 'D'): 1,
-    ('D', 'E'): 1,
-    ('D', 'F'): 4,
-    ('E', 'F'): 1,
+    ("A", "B"): 1.0,
+    ("A", "C"): 4.0,
+    ("B", "D"): 1.0,
+    ("B", "E"): 2.0,
+    ("C", "D"): 1.0,
+    ("D", "E"): 1.0,
+    ("D", "F"): 4.0,
+    ("E", "F"): 1.0,
 }
 
-# Canonical edge ordering (used for display / iteration)
 EDGES = list(TRUE_COSTS.keys())
 
 
-def build_graph(cost_dict):
-    """Build an undirected NetworkX graph from a {(u,v): weight} dict."""
+def ensure_plots_dir():
+    os.makedirs(PLOTS_DIR, exist_ok=True)
+
+
+def canonical(u: str, v: str) -> tuple[str, str]:
+    """Return edge tuple in alphabetical canonical order."""
+    return (u, v) if u < v else (v, u)
+
+
+def build_graph(cost_dict: dict) -> nx.Graph:
+    """Build an undirected NetworkX graph from edge cost mapping."""
     G = nx.Graph()
     for (u, v), w in cost_dict.items():
         G.add_edge(u, v, weight=w)
     return G
 
 
-def get_edge_cost(cost_dict, u, v):
-    """Return edge cost regardless of direction."""
-    return cost_dict.get((u, v), cost_dict.get((v, u), None))
-
-
-def shortest_path_cost(G, source='A', target='F'):
-    """Return (path_node_list, total_cost) or (None, inf) if disconnected."""
+def shortest_path_cost(G: nx.Graph, source="A", target="F") -> tuple[list, float]:
+    """Return (shortest_path_nodes, total_path_cost) or (None, inf)."""
     try:
-        path = nx.shortest_path(G, source, target, weight='weight')
-        cost = nx.shortest_path_length(G, source, target, weight='weight')
-        return path, cost
+        path = nx.shortest_path(G, source, target, weight="weight")
+        cost = nx.shortest_path_length(G, source, target, weight="weight")
+        return path, float(cost)
     except nx.NetworkXNoPath:
-        return None, float('inf')
+        return None, float("inf")
 
 
-def path_edges(path):
-    """Convert a node path to a list of canonical (u,v) edge tuples."""
-    return [(path[i], path[i + 1]) for i in range(len(path) - 1)]
-
-
-def canonical(u, v):
-    """Return edge in canonical (alphabetical) order."""
-    return (u, v) if u < v else (v, u)
+def path_to_edges(path: list) -> list[tuple[str, str]]:
+    """Convert node sequence [n1, n2, n3] to canonical edge list."""
+    if not path or len(path) < 2:
+        return []
+    return [canonical(path[i], path[i + 1]) for i in range(len(path) - 1)]
 
 
 # ---------------------------------------------------------------------------
-# VCG computation
+# VCG Mechanism Implementation
 # ---------------------------------------------------------------------------
 
-def compute_vcg(cost_dict, source='A', target='F'):
+def compute_vcg(cost_dict: dict, source="A", target="F"):
     """
-    Compute VCG payments for all edges.
+    Compute VCG payments and utilities using the Clarke pivot rule.
 
-    Returns
-    -------
-    optimal_path : list of nodes
-    d_opt        : float, total cost of optimal path
-    payments     : dict  {canonical_edge: payment}
-    utilities    : dict  {canonical_edge: utility = payment - true_cost}
+    Formula:
+      For winning edge e on optimal path:
+        p_e = d(G - {e}) - [d(G) - c_e^reported]
+        u_e = p_e - c_e^true
+      For unselected edge e (off optimal path):
+        p_e = 0.0
+        u_e = 0.0  (No cost incurred since edge is not utilized)
+
+    Returns:
+      opt_path: list of node names along optimal path
+      d_opt: float total cost of optimal path
+      payments: dict {canonical_edge: payment}
+      utilities: dict {canonical_edge: utility}
     """
     G = build_graph(cost_dict)
     opt_path, d_opt = shortest_path_cost(G, source, target)
     if opt_path is None:
-        raise ValueError(f"No path from {source} to {target}")
+        raise ValueError(f"No path between {source} and {target}")
 
-    opt_edges = path_edges(opt_path)
+    opt_edges_set = set(path_to_edges(opt_path))
     payments = {}
     utilities = {}
 
-    for (u, v), true_cost in cost_dict.items():
+    for (u, v), rep_cost in cost_dict.items():
         edge_canon = canonical(u, v)
+        true_c = TRUE_COSTS[edge_canon]
 
-        # Check if this edge is on the optimal path
-        on_path = any(canonical(a, b) == edge_canon for a, b in opt_edges)
-
-        if not on_path:
+        if edge_canon not in opt_edges_set:
             payments[edge_canon] = 0.0
-            utilities[edge_canon] = 0.0 - true_cost  # usually 0 cost assumed for off-path
+            utilities[edge_canon] = 0.0
         else:
-            # VCG payment: d(A,F without e) - [d_opt - cost(e)]
-            G_minus_e = G.copy()
-            G_minus_e.remove_edge(u, v)
-            _, d_no_e = shortest_path_cost(G_minus_e, source, target)
+            G_without_e = G.copy()
+            G_without_e.remove_edge(u, v)
+            _, d_no_e = shortest_path_cost(G_without_e, source, target)
 
-            cost_e = get_edge_cost(cost_dict, u, v)
-            payment_e = d_no_e - (d_opt - cost_e)
-            payments[edge_canon] = payment_e
-            utilities[edge_canon] = payment_e - true_cost
+            p_e = d_no_e - (d_opt - rep_cost)
+            payments[edge_canon] = float(p_e)
+            utilities[edge_canon] = float(p_e - true_c)
 
     return opt_path, d_opt, payments, utilities
 
 
-# ---------------------------------------------------------------------------
-# Summary table
-# ---------------------------------------------------------------------------
-
-def print_summary_table(opt_path, d_opt, payments, utilities):
-    """Print a formatted summary of the VCG auction results."""
-    opt_edges_set = {canonical(a, b) for a, b in path_edges(opt_path)}
-
-    header = f"{'Edge':<8} {'True Cost':>10} {'On Path':>8} {'VCG Pay':>10} {'Utility':>10}"
-    sep = '-' * len(header)
-    print()
-    print("=" * len(header))
-    print("  VCG MECHANISM — CHEAPEST PATH AUCTION  (A → F)")
-    print("=" * len(header))
-    print(f"  Optimal path : {' → '.join(opt_path)}   (total cost = {d_opt})")
-    print("=" * len(header))
-    print(header)
-    print(sep)
-
-    for (u, v) in EDGES:
-        edge_canon = canonical(u, v)
-        true_cost = TRUE_COSTS[(u, v)]
-        on_path = "Yes" if edge_canon in opt_edges_set else "No"
-        pay = payments.get(edge_canon, 0.0)
-        util = utilities.get(edge_canon, -true_cost)
-        print(f"  ({u},{v})  {true_cost:>10}   {on_path:>7}  {pay:>10.2f}  {util:>10.2f}")
-
-    print(sep)
-    total_payment = sum(p for e, p in payments.items() if e in opt_edges_set)
-    print(f"  {'TOTAL PAYMENT':>30}  {total_payment:>10.2f}")
-    print("=" * len(header))
-    print()
-
-    # Verification
-    print("Verification against textbook targets:")
-    targets = {('A', 'B'): 4.0, ('B', 'E'): 2.0, ('E', 'F'): 3.0}
-    all_ok = True
-    for (u, v), target_pay in targets.items():
-        edge_canon = canonical(u, v)
-        actual = payments.get(edge_canon, 0.0)
-        status = "✓" if abs(actual - target_pay) < 1e-9 else "✗"
-        print(f"  {status}  payment({u},{v}) = {actual:.1f}  (target {target_pay:.1f})")
-        if abs(actual - target_pay) >= 1e-9:
-            all_ok = False
-    print()
-    if all_ok:
-        print("  ✓ All payments match textbook Figure 7.3!\n")
-    else:
-        print("  ✗ Some payments do not match targets.\n")
-
-
-# ---------------------------------------------------------------------------
-# Misreporting analysis helper
-# ---------------------------------------------------------------------------
-
-def run_vcg_with_reported_cost(edge_uv, reported_cost, source='A', target='F'):
+def run_vcg_with_reported_cost(edge_uv: tuple[str, str], reported_cost: float,
+                               source="A", target="F"):
     """
-    Re-run VCG replacing the reported cost of `edge_uv` with `reported_cost`.
-    Returns (payment_for_edge, is_on_path, optimal_path).
+    Re-evaluate VCG auction when edge_uv deviates by reporting reported_cost,
+    while all other edges report truthfully.
     """
-    cost_dict = dict(TRUE_COSTS)
-    # Replace reported cost (keep true cost separate)
-    cost_dict[edge_uv] = reported_cost
+    edge_canon = canonical(*edge_uv)
+    true_cost = TRUE_COSTS[edge_canon]
 
-    G = build_graph(cost_dict)
+    rep_dict = dict(TRUE_COSTS)
+    rep_dict[edge_canon] = reported_cost
+
+    G = build_graph(rep_dict)
     opt_path, d_opt = shortest_path_cost(G, source, target)
     if opt_path is None:
-        return 0.0, False, []
+        return 0.0, 0.0, False, []
 
-    opt_edges_set = {canonical(a, b) for a, b in path_edges(opt_path)}
-    edge_canon = canonical(*edge_uv)
+    opt_edges_set = set(path_to_edges(opt_path))
     on_path = edge_canon in opt_edges_set
 
     if not on_path:
         payment = 0.0
+        utility = 0.0
     else:
-        G_minus_e = G.copy()
-        G_minus_e.remove_edge(*edge_uv)
-        _, d_no_e = shortest_path_cost(G_minus_e, source, target)
-        cost_e = reported_cost
-        payment = d_no_e - (d_opt - cost_e)
+        G_without_e = G.copy()
+        G_without_e.remove_edge(*edge_uv)
+        _, d_no_e = shortest_path_cost(G_without_e, source, target)
+        payment = d_no_e - (d_opt - reported_cost)
+        utility = payment - true_cost
 
-    return payment, on_path, opt_path
+    return float(payment), float(utility), on_path, opt_path
 
 
 # ---------------------------------------------------------------------------
-# Misreporting plots
+# Visualizations
 # ---------------------------------------------------------------------------
 
-def plot_misreporting(save_path='plots/part3_vcg_misreporting.png'):
+def plot_misreporting():
     """
-    Plot 2×2 grid analysing misreporting incentives for:
-      - Row 1: edge ON  the optimal path  (AB, true cost 1)
-      - Row 2: edge OFF the optimal path  (AC, true cost 4)
-    Columns:
-      - Col 1: utility vs reported cost
-      - Col 2: path inclusion vs reported cost
+    Examine misreported costs from 0.0 to 10.0 in steps of 0.5:
+      - Edge ON path:  AB (true cost = 1.0)
+      - Edge OFF path: AC (true cost = 4.0)
+    Generates 2x2 grid showing Utility and Path Inclusion vs Reported Cost.
     """
-    # First run baseline to know the optimal path
-    opt_path, d_opt, payments, utilities = compute_vcg(TRUE_COSTS)
-    opt_edges_set = {canonical(a, b) for a, b in path_edges(opt_path)}
+    ensure_plots_dir()
+    edge_on = ("A", "B")
+    edge_off = ("A", "C")
+    reported_grid = np.arange(0.0, 10.5, 0.5)
 
-    # Select example edges
-    edge_on  = ('A', 'B')   # on optimal path,  true cost = 1
-    edge_off = ('A', 'C')   # off optimal path, true cost = 4
-
-    reported_costs = np.arange(0, 10.5, 0.5)   # 0, 0.5, 1.0, …, 10.0  (21 values)
-
-    # Collect data
-    results = {}
+    data = {}
     for edge in [edge_on, edge_off]:
-        true_cost = TRUE_COSTS[edge]
-        utils, on_path_flags = [], []
-        for rc in reported_costs:
-            payment, on_path, _ = run_vcg_with_reported_cost(edge, rc)
-            utility = payment - true_cost   # utility = payment - TRUE cost (fixed)
-            utils.append(utility)
-            on_path_flags.append(1 if on_path else 0)
-        results[edge] = {
-            'true_cost': true_cost,
-            'utilities': utils,
-            'on_path': on_path_flags,
+        edge_canon = canonical(*edge)
+        true_c = TRUE_COSTS[edge_canon]
+        utils, pays, on_path_flags = [], [], []
+
+        for rep_c in reported_grid:
+            p, u, on_p, _ = run_vcg_with_reported_cost(edge, rep_c)
+            utils.append(u)
+            pays.append(p)
+            on_path_flags.append(1 if on_p else 0)
+
+        data[edge_canon] = {
+            "true_cost": true_c,
+            "utilities": np.array(utils),
+            "payments": np.array(pays),
+            "on_path": np.array(on_path_flags),
         }
 
-    # ------------------------------------------------------------------ plot
-    fig, axes = plt.subplots(2, 2, figsize=(13, 9))
-    fig.suptitle('VCG Mechanism — Misreporting Incentive Analysis\n'
-                 '(Optimal path: A→B→E→F, payments: AB=4, BE=2, EF=3)',
-                 fontsize=13, fontweight='bold')
+    fig, axes = plt.subplots(2, 2, figsize=(14, 9.5))
+    fig.suptitle(
+        "Part 3: VCG Mechanism — Misreporting Incentive Compatibility Analysis\n"
+        "Testing Strategic Deviations from 0.0 to 10.0 (Step = 0.5)",
+        fontsize=13, fontweight="bold", y=0.99
+    )
 
-    row_labels  = ['Edge ON path (AB, true cost = 1)',
-                   'Edge OFF path (AC, true cost = 4)']
-    col_labels  = ['Utility vs Reported Cost', 'Path Inclusion vs Reported Cost']
-    edge_colors = ['steelblue', 'darkorange']
+    configs = [
+        (edge_on, "Edge ON Path: AB (True Cost $c_{AB} = 1.0$)", "#1f77b4", 0),
+        (edge_off, "Edge OFF Path: AC (True Cost $c_{AC} = 4.0$)", "#d95f02", 1),
+    ]
 
-    for row, edge in enumerate([edge_on, edge_off]):
-        true_cost   = results[edge]['true_cost']
-        utils       = results[edge]['utilities']
-        on_path_flg = results[edge]['on_path']
-        color       = edge_colors[row]
+    for edge, title_str, color, row in configs:
+        edge_canon = canonical(*edge)
+        true_c = data[edge_canon]["true_cost"]
+        utils = data[edge_canon]["utilities"]
+        on_p = data[edge_canon]["on_path"]
 
-        # --- Col 0: Utility
-        ax = axes[row][0]
-        ax.plot(reported_costs, utils, color=color, lw=2.2, marker='o',
-                markersize=4, label='Utility')
-        ax.axvline(true_cost, color='red', ls='--', lw=1.8,
-                   label=f'Truthful report (c={true_cost})')
-        ax.axhline(0, color='gray', ls=':', lw=1.0)
+        # Col 0: Utility vs Reported Cost
+        ax_u = axes[row][0]
+        ax_u.plot(reported_grid, utils, "o-", color=color, linewidth=2.0, markersize=5,
+                  label="Agent Utility $u_e(c')$")
+        ax_u.axvline(true_c, color="forestgreen", linestyle="--", linewidth=2.0,
+                     label=f"Truthful Cost $c_e={true_c:.1f}$")
+        ax_u.axhline(0.0, color="gray", linestyle=":", linewidth=1.2)
 
-        # Mark truthful utility
-        # Find closest reported cost to true cost
-        idx_truth = np.argmin(np.abs(reported_costs - true_cost))
-        ax.scatter([reported_costs[idx_truth]], [utils[idx_truth]],
-                   color='red', zorder=5, s=80, label=f'Truthful utility')
+        truth_idx = np.argmin(np.abs(reported_grid - true_c))
+        ax_u.scatter([reported_grid[truth_idx]], [utils[truth_idx]], color="forestgreen",
+                     s=90, zorder=6, label=f"Truthful $u={utils[truth_idx]:.1f}$")
 
-        ax.set_title(f'{row_labels[row]}\n{col_labels[0]}', fontsize=10)
-        ax.set_xlabel('Reported cost')
-        ax.set_ylabel('Utility (payment − true cost)')
-        ax.legend(fontsize=8)
-        ax.grid(True, alpha=0.3)
+        ax_u.set_title(f"{title_str}\nUtility vs Reported Cost", fontsize=10.5, fontweight="bold")
+        ax_u.set_xlabel("Reported Cost $c_e'$", fontsize=9.5)
+        ax_u.set_ylabel("Utility $u_e = p_e - c_e^{\\mathrm{true}}$", fontsize=9.5)
+        ax_u.legend(fontsize=8, loc="best")
+        ax_u.grid(True, linestyle="--", alpha=0.4)
 
-        # --- Col 1: Path inclusion
-        ax = axes[row][1]
-        ax.step(reported_costs, on_path_flg, color=color, lw=2.2, where='post',
-                label='On optimal path')
-        ax.axvline(true_cost, color='red', ls='--', lw=1.8,
-                   label=f'Truthful report (c={true_cost})')
-        ax.set_yticks([0, 1])
-        ax.set_yticklabels(['No', 'Yes'])
-        ax.set_ylim(-0.15, 1.3)
+        # Col 1: Path Inclusion vs Reported Cost
+        ax_p = axes[row][1]
+        ax_p.step(reported_grid, on_p, where="post", color=color, linewidth=2.2,
+                  label="Path Inclusion (1=Yes, 0=No)")
+        ax_p.axvline(true_c, color="forestgreen", linestyle="--", linewidth=2.0,
+                     label=f"Truthful Cost $c_e={true_c:.1f}$")
+        ax_p.set_yticks([0, 1])
+        ax_p.set_yticklabels(["Excluded (No)", "Selected (Yes)"])
+        ax_p.set_ylim(-0.15, 1.25)
 
-        # Find transition points
-        transitions = np.where(np.diff(on_path_flg) != 0)[0]
+        diffs = np.diff(on_p)
+        transitions = np.where(diffs != 0)[0]
         for t in transitions:
-            xval = reported_costs[t + 1]
-            ax.axvline(xval, color='purple', ls=':', lw=1.5,
-                       label=f'Enters/exits path at c≈{xval:.1f}')
+            switch_pt = reported_grid[t + 1]
+            ax_p.axvline(switch_pt, color="purple", linestyle=":", linewidth=1.8,
+                         label=f"Transition at $c' \\approx {switch_pt:.1f}$")
 
-        ax.set_title(f'{row_labels[row]}\n{col_labels[1]}', fontsize=10)
-        ax.set_xlabel('Reported cost')
-        ax.set_ylabel('Included in optimal path?')
-        ax.legend(fontsize=8)
-        ax.grid(True, alpha=0.3)
+        ax_p.set_title(f"{title_str}\nPath Selection vs Reported Cost", fontsize=10.5, fontweight="bold")
+        ax_p.set_xlabel("Reported Cost $c_e'$", fontsize=9.5)
+        ax_p.set_ylabel("Selection Status", fontsize=9.5)
+        ax_p.legend(fontsize=8, loc="best")
+        ax_p.grid(True, linestyle="--", alpha=0.4)
 
-    plt.tight_layout()
-    os.makedirs(os.path.dirname(save_path), exist_ok=True)
-    plt.savefig(save_path, dpi=150, bbox_inches='tight')
+    plt.tight_layout(rect=[0, 0, 1, 0.96])
+    out_path = os.path.join(PLOTS_DIR, "part3_misreporting.png")
+    plt.savefig(out_path, dpi=300, bbox_inches="tight")
     plt.close()
-    print(f"  Misreporting plot saved → {save_path}")
+    print(f"  Saved plot: {out_path}")
+
+
+def print_vcg_table(opt_path: list, d_opt: float, payments: dict, utilities: dict):
+    """Print academically structured VCG outcome table."""
+    opt_edges_set = set(path_to_edges(opt_path))
+
+    header = f"{'Edge':<10} {'True Cost':>10} {'Reported':>10} {'Selected?':>11} {'VCG Payment':>13} {'Utility':>10}"
+    sep = "-" * len(header)
+    print("\n" + "=" * len(header))
+    print("  VCG MECHANISM: SHORTEST PATH PROCUREMENT AUCTION (FIGURE 7.3)")
+    print("=" * len(header))
+    print(f"  Source Node: A | Destination Node: F")
+    print(f"  Chosen Optimal Path: {' -> '.join(opt_path)} (Total Cost = {d_opt:.1f})")
+    print("=" * len(header))
+    print(header)
+    print(sep)
+
+    for edge in EDGES:
+        edge_canon = canonical(*edge)
+        tc = TRUE_COSTS[edge_canon]
+        sel = "YES" if edge_canon in opt_edges_set else "NO"
+        p = payments[edge_canon]
+        u = utilities[edge_canon]
+        print(f"  {str(edge):<8} {tc:>10.1f} {tc:>10.1f} {sel:>11} {p:>13.2f} {u:>10.2f}")
+
+    print(sep)
+    total_pay = sum(payments.values())
+    print(f"  {'TOTAL MECHANISM PAYMENT:':>45} {total_pay:>13.2f}")
+    print("=" * len(header))
+
+    targets = {("A", "B"): 4.0, ("B", "E"): 2.0, ("E", "F"): 3.0}
+    print("\nTextbook Benchmark Verification:")
+    all_matched = True
+    for edge, target_p in targets.items():
+        actual_p = payments[edge]
+        match = np.isclose(actual_p, target_p, atol=1e-5)
+        status = "PASSED [OK]" if match else "FAILED [MISMATCH]"
+        print(f"  * Edge {edge}: Target = {target_p:.1f}, Computed = {actual_p:.1f} -> {status}")
+        if not match:
+            all_matched = False
+
+    if all_matched:
+        print("\n  ALL VCG PAYMENTS PERFECTLY REPRODUCE TEXTBOOK FIGURE 7.3 TARGETS!\n")
+
+
+def print_misreporting_summary():
+    """Print analytical breakdown of strategic misreporting incentives."""
+    print("=" * 70)
+    print("  STRATEGIC MISREPORTING INCENTIVE ANALYSIS SUMMARY")
+    print("=" * 70)
+    print("1. Winning Edge AB (True Cost = 1.0, Truthful Payment = 4.0, Utility = 3.0):")
+    print("   - Reporting c' in [0.0, 4.0]: AB remains on the path.")
+    print("     Because payment depends solely on others' costs, payment remains 4.0")
+    print("     and utility remains constant at 3.0.")
+    print("   - Reporting c' > 4.0: Alternative path ACDEF (cost 7) becomes cheaper.")
+    print("     AB is excluded from the path, receiving payment 0.0 and utility 0.0.")
+    print("   -> Conclusion: No misreport can increase AB's utility beyond 3.0.")
+    print("\n2. Losing Edge AC (True Cost = 4.0, Truthful Payment = 0.0, Utility = 0.0):")
+    print("   - Reporting c' >= 1.0: AC remains off the optimal path (utility = 0.0).")
+    print("   - Underreporting c' < 1.0: AC enters path ACDEF (cost c' + 3 < 4).")
+    print("     VCG payment is p = d(without AC) - (d(with AC) - c') = 4 - 3 = 1.0.")
+    print("     Because true cost is 4.0, AC's utility = 1.0 - 4.0 = -3.0 (loss!).")
+    print("   -> Conclusion: AC achieves max utility (0.0) by reporting truthfully.")
+    print("=" * 70 + "\n")
 
 
 # ---------------------------------------------------------------------------
-# Main
+# Main Execution
 # ---------------------------------------------------------------------------
 
 def main():
-    print("\n" + "=" * 60)
-    print("  PART 3: VCG MECHANISM — CHEAPEST PATH AUCTION")
-    print("=" * 60)
+    print("=" * 70)
+    print("Part 3: VCG Mechanism for Shortest-Path Procurement")
+    print("=" * 70)
 
-    # ------- Step 1: Run VCG with true costs ---------------------------------
-    print("\n[1] Computing VCG with true costs …")
     opt_path, d_opt, payments, utilities = compute_vcg(TRUE_COSTS)
+    print_vcg_table(opt_path, d_opt, payments, utilities)
 
-    print(f"    Graph edges (true costs): {dict(TRUE_COSTS)}")
-    print(f"    Optimal path: {' → '.join(opt_path)}  (cost = {d_opt})")
+    print("\n[Running Strategic Misreporting Analysis (Grid: 0.0 to 10.0, step 0.5)]")
+    plot_misreporting()
 
-    # ------- Step 2: Print summary table -------------------------------------
-    print_summary_table(opt_path, d_opt, payments, utilities)
-
-    # ------- Step 3: Misreporting analysis -----------------------------------
-    print("[2] Running misreporting analysis …")
-    os.makedirs('plots', exist_ok=True)
-    plot_misreporting('plots/part3_vcg_misreporting.png')
-
-    # ------- Step 4: Brief narrative -----------------------------------------
-    print("\n[3] Key takeaways:")
-    print("    • VCG makes truthful reporting a dominant strategy.")
-    print("    • Edge AB (on path, cost 1): misreporting a higher cost")
-    print("      eventually causes exclusion from the path → 0 payment but")
-    print("      utility = 0 - 1 = -1 (worse than truthful utility = 3).")
-    print("    • Edge AC (off path, cost 4): regardless of reported cost,")
-    print("      it cannot improve its utility beyond 0 by misreporting;")
-    print("      underreporting to get on path yields negative utility.")
-    print("    • Both edges are best-off reporting truthfully ⇒ incentive-")
-    print("      compatible mechanism.\n")
+    print_misreporting_summary()
+    print("Part 3 complete. Plot saved:")
+    print("  - plots/part3_misreporting.png")
 
 
 if __name__ == "__main__":
