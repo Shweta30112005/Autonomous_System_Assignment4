@@ -24,7 +24,7 @@
 
 ## 1. Executive Summary & Objectives
 
-In multi-agent systems, autonomous agents frequently possess private information—such as task completion costs, valuation of shared resources, or latency bounds—and seek to optimize their individual payoff. If the system protocol relies on naive reporting, rational self-interested agents have strong incentives to misreport their private data to manipulate the outcome in their favor.
+In multi-agent systems, autonomous agents frequently possess private information such as task completion costs, valuation of shared resources, or latency bounds and seek to optimize their individual payoff. If the system protocol relies on naive reporting, rational self-interested agents have strong incentives to misreport their private data to manipulate the outcome in their favor.
 
 **Mechanism design** resolves this challenge by formulating game-theoretic rules and transfer payment functions that align individual selfish incentives with socially optimal system objectives.
 
@@ -35,53 +35,126 @@ This assignment explores three fundamental mechanism design frameworks:
 
 ---
 
+
 ## 2. Theoretical Foundations
 
 ### 2.1 Second-Price (Vickrey) Sealed-Bid Auction
+
 In a single-item second-price auction, each agent $i$ submits a sealed bid $b_i$. The item is awarded to the highest bidder:
-$$i^* = \arg\max_{i} b_i$$
+
+$$
+i^{*} = \arg\max_{i} b_i
+$$
+
 The winner pays the **second-highest bid**:
-$$p_{i^*} = \max_{j \neq i^*} b_j$$
+
+$$
+p_i^* = \max_j \neq i^* b_j
+$$
+
 All losing bidders pay zero. The utility of agent $i$ with true private value $v_i$ is:
-$$u_i(b_i, \mathbf{b}_{-i}) = \begin{cases} v_i - \max_{j \neq i} b_j & \text{if } b_i > \max_{j \neq i} b_j \\ 0 & \text{if } b_i < \max_{j \neq i} b_j \end{cases}$$
+
+$$
+u_i(b_i, \mathbf{b}_{-i}) =
+\begin{cases}
+v_i - \max_{j \neq i} b_j & \text{if } b_i > \max_{j \neq i} b_j \\
+0 & \text{if } b_i < \max_{j \neq i} b_j
+\end{cases}
+$$
 
 **Dominant-Strategy Incentive Compatibility (DSIC):**
+
 Bidding truthfully ($b_i = v_i$) is a weakly dominant strategy:
-- If an agent underbids ($b_i < v_i$), they never reduce the price paid upon winning (which is determined solely by rival bids), but they risk losing when $\max_{j \neq i} b_j \in (b_i, v_i)$, forfeiting positive utility $v_i - \max b_j > 0$.
-- If an agent overbids ($b_i > v_i$), they win only when they would have won anyway (at the exact same price), or they win when $\max_{j \neq i} b_j \in (v_i, b_i)$, resulting in negative utility $v_i - \max b_j < 0$.
+
+- If an agent underbids ($b_i < v_i$), they never reduce the price paid upon winning (which is determined solely by rival bids), but they risk losing when $\max_{j \neq i} b_j \in (b_i, v_i)$, forfeiting positive utility $v_i - \max_{j \neq i} b_j > 0$.
+- If an agent overbids ($b_i > v_i$), they win only when they would have won anyway (at the exact same price), or they win when $\max_{j \neq i} b_j \in (v_i, b_i)$, resulting in negative utility $v_i - \max_{j \neq i} b_j < 0$.
 - Hence, $u_i(v_i, \mathbf{b}_{-i}) \ge u_i(b_i', \mathbf{b}_{-i})$ for all $b_i'$ and all rival bids $\mathbf{b}_{-i}$.
 
 ### 2.2 First-Price Sealed-Bid Auction & Bayesian Nash Equilibrium
+
 In a first-price auction, the winner pays their **own bid**:
-$$p_{i^*} = b_{i^*}, \quad u_i = \begin{cases} v_i - b_i & \text{if } b_i > \max_{j \neq i} b_j \\ 0 & \text{if } b_i < \max_{j \neq i} b_j \end{cases}$$
+
+$$
+p_i^* = b_i^*
+$$
+
+$$
+u_i =
+\begin{cases}
+v_i - b_i & \text{if } b_i > \max_{j \neq i} b_j \\
+0 & \text{if } b_i < \max_{j \neq i} b_j
+\end{cases}
+$$
+
 Because paying one's own bid yields zero surplus when bidding truthfully ($v_i - v_i = 0$), rational bidders shade their bids downward to trade off win probability against profit margin.
 
 For $n$ symmetric risk-neutral bidders with valuations $v_i \sim U[0, 1]$ i.i.d., the unique symmetric Bayesian Nash Equilibrium (BNE) strategy is:
-$$b^*(v_i) = \left( \frac{n - 1}{n} \right) v_i$$
+
+$$
+b^{*}(v_i) = \left( \frac{n - 1}{n} \right) v_i
+$$
 
 **Equilibrium Deviation Analysis:**
-When Bidder 1 bids $b_1 = k \cdot v_1$ while the remaining $n-1$ rivals bid $b^*(v_j) = \frac{n-1}{n} v_j$, the expected utility of Bidder 1 for $k \le \frac{n-1}{n}$ is:
-$$\mathbb{E}[u_1(k)] = \frac{1 - k}{n + 1} \left( \frac{n k}{n - 1} \right)^{n - 1}$$
+
+When Bidder 1 bids $b_1 = k \cdot v_1$ while the remaining $n-1$ rivals bid $b^{*}(v_j) = \frac{n-1}{n} v_j$, the expected utility of Bidder 1 for $k \le \frac{n-1}{n}$ is:
+
+$$
+\mathbb{E}[u_1(k)] =
+\frac{1-k}{n+1}
+\left( \frac{nk}{n-1} \right)^{n-1}
+$$
+
 Differentiating with respect to $k$ yields:
-$$\frac{d}{dk} \left[ (1 - k) k^{n-1} \right] = k^{n-2} \left[ (n-1)(1 - k) - k \right] = 0 \implies k^* = \frac{n - 1}{n}$$
+
+$$
+\frac{d}{dk} \left[ (1-k)k^{n-1} \right]
+= k^{n-2} \left[ (n-1)(1-k)-k \right] = 0
+$$
+
+$$
+\implies k^{*} = \frac{n-1}{n}
+$$
+
 At this equilibrium, the expected utility achieved is:
-$$\mathbb{E}[u_1(k^*)] = \frac{1}{n(n + 1)}$$
+
+$$
+\mathbb{E}[u_1(k^{*})] = \frac{1}{n(n+1)}
+$$
 
 **Structural Winner's Regret:**
+
 Because bid values are continuous real numbers, the event of an exact tie has probability zero ($P(b_{(1)} = b_{(2)}) = 0$). Consequently, in **100% of winning auctions**, the winner pays strictly more than the second-highest bid ($b_{(1)} > b_{(2)}$). The winner could always ex-post have bid $b_{(2)} + \epsilon$ and still won. The expected gap $\mathbb{E}[b_{(1)} - b_{(2)}]$ represents the average surplus left on the table.
 
 ### 2.3 The Vickrey-Clarke-Groves (VCG) Mechanism
+
 In network path procurement, a buyer seeks the cheapest path from source $A$ to destination $F$ across a graph $G = (V, E)$, where each edge $e$ is an autonomous agent with private cost $c_e$.
 
-The mechanism selects the path $P^*$ minimizing total reported cost:
-$$P^* = \arg\min_{P \in \mathcal{P}_{A \to F}} \sum_{e \in P} c_e$$
-Under the Clarke pivot rule, each selected edge $e \in P^*$ receives a payment equal to its reported cost plus the externality it imposes on the remaining network:
-$$p_e = d(G \setminus \{e\}) - \left( d(G) - c_e \right)$$
-where $d(G)$ is the shortest path cost in $G$, and $d(G \setminus \{e\})$ is the shortest path cost when edge $e$ is unavailable. Unselected edges ($e \notin P^*$) receive $p_e = 0$.
+The mechanism selects the path $P^{*}$ minimizing total reported cost:
+
+$$
+P^{*} = \arg\min_{P \in \mathcal{P}_{A \to F}} \sum_{e \in P} c_e
+$$
+
+Under the Clarke pivot rule, each selected edge $e \in P^{*}$ receives a payment equal to its reported cost plus the externality it imposes on the remaining network:
+
+$$
+p_e = d(G \setminus \{e\}) - \left( d(G) - c_e \right)
+$$
+
+where $d(G)$ is the shortest path cost in $G$, and $d(G \setminus \{e\})$ is the shortest path cost when edge $e$ is unavailable. Unselected edges ($e \notin P^{*}$) receive $p_e = 0$.
 
 Because unselected edges do not route traffic, they incur no cost. The utility is:
-$$u_e = \begin{cases} p_e - c_e^{\text{true}} = d(G \setminus \{e\}) - d(G) & \text{if } e \in P^* \\ 0 & \text{if } e \notin P^* \end{cases}$$
+
+$$
+u_e =
+\begin{cases}
+p_e - c_e^{\text{true}} = d(G \setminus \{e\}) - d(G) & \text{if } e \in P^* \\
+0 & \text{if } e \notin P^*
+\end{cases}
+$$
+
 VCG guarantees:
+
 1. **Strategyproofness (Truthfulness):** Truthful reporting ($c_e' = c_e^{\text{true}}$) is a dominant strategy for all agents.
 2. **Individual Rationality:** $u_e \ge 0$ under truthful reporting; no participating agent suffers a financial loss.
 
@@ -90,13 +163,9 @@ VCG guarantees:
 ## 3. Repository Structure
 
 ```
-assignment4/
 ├── part1_second_price_auction.py       # Part 1: Second-price auction simulation & verification
 ├── part2_first_price_auction.py        # Part 2: First-price auction equilibrium & overpayment
 ├── part3_vcg_mechanism.py              # Part 3: VCG cheapest path procurement mechanism
-├── generate_report_pdf.py              # Automated academic PDF report generator (ReportLab)
-├── Autonomous_System_Assignment4_Report.tex  # Comprehensive LaTeX source report
-├── Autonomous_System_Assignment4_Report.pdf  # Compiled 8-page academic submission report
 ├── requirements.txt                    # Project Python package dependencies
 ├── README.md                           # Comprehensive documentation and project guide
 └── plots/                              # High-resolution (300 DPI) publication figures
@@ -123,8 +192,6 @@ pip install -r requirements.txt
 numpy
 matplotlib
 networkx
-reportlab
-pypdf
 ```
 
 ---
@@ -150,12 +217,6 @@ python part2_first_price_auction.py
 python part3_vcg_mechanism.py
 ```
 *Outputs:* Computes optimal path $A \to B \to E \to F$, reproduces exact textbook payments ($p_{AB}=4, p_{BE}=2, p_{EF}=3$), and evaluates strategic deviations across $[0.0, 10.0]$ saved in `part3_misreporting.png`.
-
-### Generate Full Academic PDF Report:
-```bash
-python generate_report_pdf.py
-```
-*Outputs:* Compiles `Autonomous_System_Assignment4_Report.pdf` (8 pages) containing all math, tables, embedded plots, and references.
 
 ---
 
@@ -232,7 +293,7 @@ Using Figure 7.3 from Shoham and Leyton-Brown:
 | **(D, E)** | 1.0 | 1.0 | NO | 0.00 | 0.00 | **0.0 (Matched ✓)** |
 | **(D, F)** | 4.0 | 4.0 | NO | 0.00 | 0.00 | **0.0 (Matched ✓)** |
 | **(E, F)** | 1.0 | 1.0 | **YES** | **3.00** | 2.00 | **3.0 (Matched ✓)** |
-| **TOTAL** | — | — | — | **9.00** | **5.00** | **All Verified ✓** |
+| **TOTAL** | - | - | - | **9.00** | **5.00** | **All Verified ✓** |
 
 #### Strategic Misreporting Analysis
 We evaluated reported costs from $0.0$ to $10.0$ in steps of $0.5$:
