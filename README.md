@@ -1,4 +1,4 @@
-# Autonomous Systems — Assignment 4: Mechanism Design & Auction Theory
+# Autonomous Systems - Assignment 4: Mechanism Design & Auction Theory
 
 ---
 
