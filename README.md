@@ -1,424 +1,670 @@
-# Autonomous Systems - Assignment 4: Mechanism Design & Auction Theory
+# Autonomous Systems - Assignment 4
+## Mechanism Design & Auction Theory
+
+This project explores how different auction mechanisms and payment
+rules influence the decisions of rational, self-interested agents.
+
+In multi-agent systems, agents often possess private information,
+such as their valuation of a resource or the cost of completing
+a task. Since agents aim to maximize their individual utility,
+they may have incentives to misreport this information.
+
+Mechanism Design provides a framework for designing rules and
+payment structures that encourage agents to behave truthfully
+while achieving desirable system-wide outcomes.
+
+This assignment studies three important mechanisms:
+
+1. **Second-Price Sealed-Bid Auction**
+   - Investigating truthful bidding as a weakly dominant strategy.
+   - Comparing truthful, half-value, and random rival strategies.
+   - Verifying the results analytically and experimentally.
+
+2. **First-Price Sealed-Bid Auction**
+   - Studying strategic bid shading.
+   - Verifying the Bayesian Nash Equilibrium.
+   - Measuring ex-post regret and overpayment.
+
+3. **Vickrey-Clarke-Groves (VCG) Mechanism**
+   - Implementing shortest-path procurement.
+   - Calculating Clarke pivot payments.
+   - Testing whether agents can benefit from misreporting their costs.
+
+The experiments combine mathematical analysis with Python-based
+simulations to understand how these mechanisms behave under
+different strategic conditions.
 
 ---
 
 ## Table of Contents
-1. [Executive Summary & Objectives](#1-executive-summary--objectives)
-2. [Theoretical Foundations](#2-theoretical-foundations)
-   - [2.1 Second-Price (Vickrey) Sealed-Bid Auction](#21-second-price-vickrey-sealed-bid-auction)
-   - [2.2 First-Price Sealed-Bid Auction & Bayesian Nash Equilibrium](#22-first-price-sealed-bid-auction--bayesian-nash-equilibrium)
-   - [2.3 The Vickrey-Clarke-Groves (VCG) Mechanism](#23-the-vickrey-clarke-groves-vcg-mechanism)
+
+1. [Introduction](#autonomous-systems---assignment-4)
+2. [Theoretical Background](#2-theoretical-background)
+   - [2.1 Second-Price Auction](#21-second-price-sealed-bid-auction)
+   - [2.2 First-Price Auction](#22-first-price-sealed-bid-auction)
+   - [2.3 VCG Mechanism](#23-vickrey-clarke-groves-vcg-mechanism)
 3. [Repository Structure](#3-repository-structure)
-4. [Installation & Requirements](#4-installation--requirements)
-5. [Execution Instructions](#5-execution-instructions)
-6. [Detailed Experimental Results & Analysis](#6-detailed-experimental-results--analysis)
-   - [Part 1: Second-Price Sealed-Bid Auction](#part-1-second-price-sealed-bid-auction)
-   - [Part 2: First-Price Sealed-Bid Auction](#part-2-first-price-sealed-bid-auction)
-   - [Part 3: VCG Mechanism for Shortest-Path Procurement](#part-3-vcg-mechanism-for-shortest-path-procurement)
-7. [Computational Complexity & Scalability Analysis](#7-computational-complexity--scalability-analysis)
-8. [Limitations & Practical Considerations](#8-limitations--practical-considerations)
-9. [Conclusions](#9-conclusions)
-10. [References](#10-references)
+4. [Installation and Requirements](#4-installation-and-requirements)
+   - [4.1 Prerequisites](#41-prerequisites)
+   - [4.2 Clone the Repository](#42-clone-the-repository)
+   - [4.3 Install Dependencies](#43-install-dependencies)
+5. [Running the Experiments](#5-running-the-experiments)
+   - [Part 1: Second-Price Auction](#part-1-second-price-auction)
+   - [Part 2: First-Price Auction](#part-2-first-price-auction)
+   - [Part 3: VCG Mechanism](#part-3-vcg-mechanism)
+6. [Experimental Results and Analysis](#6-experimental-results-and-analysis)
+   - [6.1 Part 1: Second-Price Auction](#61-part-1-second-price-auction)
+     - [6.1.1 One Rival Bidder](#611-one-rival-bidder)
+     - [6.1.2 Fixed Rival Bid: Analytical Verification](#612-fixed-rival-bid-analytical-verification)
+     - [6.1.3 Two Rival Bidders](#613-two-rival-bidders)
+   - [6.2 Part 2: First-Price Auction](#62-part-2-first-price-auction)
+     - [6.2.1 Expected Utility and Equilibrium Verification](#621-expected-utility-and-equilibrium-verification)
+     - [6.2.2 Ex-Post Regret and Overpayment Analysis](#622-ex-post-regret-and-overpayment-analysis)
+   - [6.3 Part 3: VCG Mechanism](#63-part-3-vcg-mechanism)
+     - [6.3.1 Network Configuration](#631-network-configuration)
+     - [6.3.2 Clarke Pivot Payments](#632-clarke-pivot-payments)
+     - [6.3.3 Strategic Misreporting Analysis](#633-strategic-misreporting-analysis)
+7. [Comparison of Mechanism Properties](#7-comparison-of-mechanism-properties)
+8. [Computational Complexity](#8-computational-complexity)
+9. [Limitations and Practical Considerations](#9-limitations-and-practical-considerations)
+10. [Conclusion](#10-conclusion)
+11. [References](#11-references)
+12. [Reproducibility](#12-reproducibility)
 
 ---
 
-## 1. Executive Summary & Objectives
+## 2. Theoretical Background
 
-In multi-agent systems, autonomous agents frequently possess private information such as task completion costs, valuation of shared resources, or latency bounds and seek to optimize their individual payoff. If the system protocol relies on naive reporting, rational self-interested agents have strong incentives to misreport their private data to manipulate the outcome in their favor.
+### 2.1 Second-Price Sealed-Bid Auction
 
-**Mechanism design** resolves this challenge by formulating game-theoretic rules and transfer payment functions that align individual selfish incentives with socially optimal system objectives.
+In a second-price auction, every bidder submits a sealed bid.
+The bidder with the highest bid wins the item but pays the
+second-highest bid rather than their own bid.
 
-This assignment explores three fundamental mechanism design frameworks:
-1. **Part 1 (Second-Price Sealed-Bid Auction):** Simulates $N = 100{,}000$ auctions per candidate bid across valuations $v_1 \in \{0.2, 0.5, 0.8\}$ against rivals adopting truthful, half-value, and random bidding strategies. Demonstrates that truthful bidding ($b_1 = v_1$) is weakly dominant, identifies the half-value plateau phenomenon, and analytically verifies dominance under fixed rival bids with one and two rivals.
-2. **Part 2 (First-Price Sealed-Bid Auction):** Evaluates strategic deviations where Bidder 1 bids $b_1 = k \cdot v_1$ for $k \in [0.1, 2.0]$ against $n-1$ rivals adhering to the Bayesian Nash Equilibrium (BNE) $b_i = \frac{n-1}{n} v_i$ for $n \in \{2, 3, 4\}$. Empirically confirms that the payoff-maximizing deviation factor coincides with $k^* = \frac{n-1}{n}$ and proves that the winner overpays in 100% of continuous-bid auctions.
-3. **Part 3 (VCG Mechanism for Shortest-Path Procurement):** Implements network path procurement on the classic benchmark from Shoham and Leyton-Brown (Figure 7.3). Reproduces the optimal path $A \to B \to E \to F$ (cost 4) and exact Clarke pivot payments ($p_{AB}=4, p_{BE}=2, p_{EF}=3$), and conducts misreporting experiments across $c' \in [0.0, 10.0]$ (step 0.5) proving that no edge agent can strictly benefit by lying.
+Let:
+- $v_i$ = True valuation of bidder $i$
+- $b_i$ = Bid submitted by bidder $i$
+- $b_{-i}$ = Bids submitted by all other bidders
 
----
-
-
-## 2. Theoretical Foundations
-
-### 2.1 Second-Price (Vickrey) Sealed-Bid Auction
-
-In a single-item second-price auction, each agent $i$ submits a sealed bid $b_i$. The item is awarded to the highest bidder:
+The winner is:
 
 $$
-i^{*} = \arg\max_{i} b_i
+i^* = \arg\max_i b_i
 $$
 
-The winner pays the **second-highest bid**:
+The winner's payment is:
 
 $$
 p_i^* = \max_j \neq i^* b_j
 $$
 
-All losing bidders pay zero. The utility of agent $i$ with true private value $v_i$ is:
-
-$$
-u_i(b_i, \mathbf{b}_{-i}) =
-\begin{cases}
-v_i - \max_{j \neq i} b_j & \text{if } b_i > \max_{j \neq i} b_j \\
-0 & \text{if } b_i < \max_{j \neq i} b_j
-\end{cases}
-$$
-
-**Dominant-Strategy Incentive Compatibility (DSIC):**
-
-Bidding truthfully ($b_i = v_i$) is a weakly dominant strategy:
-
-- If an agent underbids ($b_i < v_i$), they never reduce the price paid upon winning (which is determined solely by rival bids), but they risk losing when $\max_{j \neq i} b_j \in (b_i, v_i)$, forfeiting positive utility $v_i - \max_{j \neq i} b_j > 0$.
-- If an agent overbids ($b_i > v_i$), they win only when they would have won anyway (at the exact same price), or they win when $\max_{j \neq i} b_j \in (v_i, b_i)$, resulting in negative utility $v_i - \max_{j \neq i} b_j < 0$.
-- Hence, $u_i(v_i, \mathbf{b}_{-i}) \ge u_i(b_i', \mathbf{b}_{-i})$ for all $b_i'$ and all rival bids $\mathbf{b}_{-i}$.
-
-### 2.2 First-Price Sealed-Bid Auction & Bayesian Nash Equilibrium
-
-In a first-price auction, the winner pays their **own bid**:
-
-$$
-p_i^* = b_i^*
-$$
+The utility of bidder $i$ is:
 
 $$
 u_i =
 \begin{cases}
-v_i - b_i & \text{if } b_i > \max_{j \neq i} b_j \\
-0 & \text{if } b_i < \max_{j \neq i} b_j
+v_i - \max_{j \neq i} b_j, & \text{if bidder } i \text{ wins} \\
+0, & \text{otherwise}
 \end{cases}
 $$
 
-Because paying one's own bid yields zero surplus when bidding truthfully ($v_i - v_i = 0$), rational bidders shade their bids downward to trade off win probability against profit margin.
+**Truthful bidding is a weakly dominant strategy.**
 
-For $n$ symmetric risk-neutral bidders with valuations $v_i \sim U[0, 1]$ i.i.d., the unique symmetric Bayesian Nash Equilibrium (BNE) strategy is:
+This means that bidding the actual valuation ($b_i = v_i$)
+never gives a lower utility than any alternative bid,
+regardless of what the other bidders do.
 
-$$
-b^{*}(v_i) = \left( \frac{n - 1}{n} \right) v_i
-$$
+- Underbidding may cause a bidder to lose an item they
+  would have acquired profitably.
+- Overbidding may cause a bidder to win an item at a price
+  greater than its actual valuation.
+- Truthful bidding avoids both situations.
 
-**Equilibrium Deviation Analysis:**
+### 2.2 First-Price Sealed-Bid Auction
 
-When Bidder 1 bids $b_1 = k \cdot v_1$ while the remaining $n-1$ rivals bid $b^{*}(v_j) = \frac{n-1}{n} v_j$, the expected utility of Bidder 1 for $k \le \frac{n-1}{n}$ is:
+In a first-price auction, the highest bidder wins and pays
+their own submitted bid.
 
-$$
-\mathbb{E}[u_1(k)] =
-\frac{1-k}{n+1}
-\left( \frac{nk}{n-1} \right)^{n-1}
-$$
-
-Differentiating with respect to $k$ yields:
-
-$$
-\frac{d}{dk} \left[ (1-k)k^{n-1} \right]
-= k^{n-2} \left[ (n-1)(1-k)-k \right] = 0
-$$
+The winner's utility is:
 
 $$
-\implies k^{*} = \frac{n-1}{n}
+u_i =
+\begin{cases}
+v_i - b_i, & \text{if bidder } i \text{ wins} \\
+0, & \text{otherwise}
+\end{cases}
 $$
 
-At this equilibrium, the expected utility achieved is:
+Unlike a second-price auction, bidding truthfully is not
+generally optimal because the winner pays their own bid.
+
+For $n$ symmetric, risk-neutral bidders with valuations
+independently drawn from $U[0,1]$, the symmetric Bayesian
+Nash Equilibrium (BNE) bidding strategy is:
 
 $$
-\mathbb{E}[u_1(k^{*})] = \frac{1}{n(n+1)}
+b^*(v_i) = \frac{n-1}{n}v_i
 $$
 
-**Structural Winner's Regret:**
+Thus, rational bidders shade their bids below their true
+valuations to balance the probability of winning against
+the profit earned when they win.
 
-Because bid values are continuous real numbers, the event of an exact tie has probability zero ($P(b_{(1)} = b_{(2)}) = 0$). Consequently, in **100% of winning auctions**, the winner pays strictly more than the second-highest bid ($b_{(1)} > b_{(2)}$). The winner could always ex-post have bid $b_{(2)} + \epsilon$ and still won. The expected gap $\mathbb{E}[b_{(1)} - b_{(2)}]$ represents the average surplus left on the table.
-
-### 2.3 The Vickrey-Clarke-Groves (VCG) Mechanism
-
-In network path procurement, a buyer seeks the cheapest path from source $A$ to destination $F$ across a graph $G = (V, E)$, where each edge $e$ is an autonomous agent with private cost $c_e$.
-
-The mechanism selects the path $P^{*}$ minimizing total reported cost:
+We investigate deviations using:
 
 $$
-P^{*} = \arg\min_{P \in \mathcal{P}_{A \to F}} \sum_{e \in P} c_e
+b_1 = k \cdot v_1
 $$
 
-Under the Clarke pivot rule, each selected edge $e \in P^{*}$ receives a payment equal to its reported cost plus the externality it imposes on the remaining network:
+where $k$ is the deviation factor.
+
+The equilibrium occurs at:
 
 $$
-p_e = d(G \setminus \{e\}) - \left( d(G) - c_e \right)
+k^* = \frac{n-1}{n}
 $$
 
-where $d(G)$ is the shortest path cost in $G$, and $d(G \setminus \{e\})$ is the shortest path cost when edge $e$ is unavailable. Unselected edges ($e \notin P^{*}$) receive $p_e = 0$.
+### 2.3 Vickrey-Clarke-Groves (VCG) Mechanism
 
-Because unselected edges do not route traffic, they incur no cost. The utility is:
+The VCG mechanism is a truthful mechanism designed to
+encourage agents to report their private costs accurately.
+
+In this experiment, we consider a network in which each
+edge represents an agent with a private cost.
+
+The objective is to find the minimum-cost path from
+source $A$ to destination $F$.
+
+The selected path is:
+
+$$
+P^* = \arg\min_{P \in \mathcal{P}_{A \rightarrow F}}
+\sum_{e \in P} c_e
+$$
+
+The Clarke pivot payment for a selected edge $e$ is:
+
+$$
+p_e =
+d(G \setminus \{e\}) - (d(G)-c_e)
+$$
+
+where:
+
+- $d(G)$ is the minimum path cost in the original network.
+- $d(G \setminus \{e\})$ is the minimum path cost when
+  edge $e$ is removed.
+- $c_e$ is the reported cost of the selected edge.
+
+The utility of an edge agent is:
 
 $$
 u_e =
 \begin{cases}
-p_e - c_e^{\text{true}} = d(G \setminus \{e\}) - d(G) & \text{if } e \in P^* \\
-0 & \text{if } e \notin P^*
+p_e-c_e^{true}, & e \in P^* \\
+0, & e \notin P^*
 \end{cases}
 $$
 
-VCG guarantees:
+The mechanism provides two important guarantees:
 
-1. **Strategyproofness (Truthfulness):** Truthful reporting ($c_e' = c_e^{\text{true}}$) is a dominant strategy for all agents.
-2. **Individual Rationality:** $u_e \ge 0$ under truthful reporting; no participating agent suffers a financial loss.
+1. **Strategyproofness:** Truthful cost reporting is a
+   dominant strategy.
+2. **Individual Rationality:** Agents do not obtain
+   negative utility by participating truthfully.
 
 ---
 
 ## 3. Repository Structure
 
 ```
-├── part1_second_price_auction.py       # Part 1: Second-price auction simulation & verification
-├── part2_first_price_auction.py        # Part 2: First-price auction equilibrium & overpayment
-├── part3_vcg_mechanism.py              # Part 3: VCG cheapest path procurement mechanism
-├── requirements.txt                    # Project Python package dependencies
-├── README.md                           # Comprehensive documentation and project guide
-└── plots/                              # High-resolution (300 DPI) publication figures
-    ├── part1a_one_rival.png            # Part 1A: 3x3 grid (1 rival, 3 strategies)
-    ├── part1b_fixed_rival.png          # Part 1B: 3x3 grid (fixed rival bids)
-    ├── part1c_two_rivals.png           # Part 1C: 3x3 grid (2 rivals, stochastic)
-    ├── part2_utility.png               # Part 2: Expected utility vs k (n=2, 3, 4)
-    ├── part2_overpaid.png              # Part 2: Overpayment fraction and regret margin
-    └── part3_misreporting.png          # Part 3: Strategic misreporting 2x2 grid
+├── README.md                       # Project documentation, methodology, results and conclusions
+├── requirements.txt                # Required Python libraries and dependencies
+│
+├── part1_second_price_auction.py   # Second-price auction simulation and truthful bidding analysis
+├── part2_first_price_auction.py    # First-price auction simulation, bid shading and ex-post regret
+├── part3_vcg_mechanism.py          # VCG mechanism, shortest-path allocation and Clarke pivot payments
+│
+└── plots/
+    ├── part1a_one_rival.png        # Utility analysis with one rival under different bidding strategies
+    ├── part1b_fixed_rival.png      # Analytical verification against fixed rival bids
+    ├── part1c_two_rivals.png       # Utility analysis with two competing rivals
+    ├── part2_overpaid.png          # Winner's ex-post regret and overpayment analysis
+    ├── part2_utility.png           # Simulated utility vs. theoretical BNE for 2, 3 and 4 bidders
+    └── part3_misreporting.png      # VCG utility and path selection under strategic cost misreporting
 ```
 
 ---
 
-## 4. Installation & Requirements
 
-Ensure Python 3.10+ is installed. Install all necessary dependencies via `pip`:
+
+## 4. Installation and Requirements
+
+### 4.1 Prerequisites
+
+Make sure the following are installed:
+
+- Python 3.10 or above
+- pip (Python package manager)
+- Git (optional, for cloning the repository)
+
+### 4.2 Clone the Repository
+
+```bash
+git clone <repository-url>
+cd <repository-folder>
+```
+
+### 4.3 Install Dependencies
 
 ```bash
 pip install -r requirements.txt
 ```
 
-*Contents of `requirements.txt`:*
-```
-numpy
-matplotlib
-networkx
-```
+The project uses the following libraries:
+
+| Library | Purpose |
+|---|---|
+| NumPy | Numerical computations and auction simulations |
+| Matplotlib | Generating experimental plots |
+| NetworkX | Graph representation and path-related operations |
 
 ---
 
-## 5. Execution Instructions
+## 5. Running the Experiments
 
-Each component of the assignment can be executed independently from the terminal:
+Each part of the assignment is implemented in a separate Python script and can be executed independently.
 
-### Run Part 1 (Second-Price Auction Simulation):
+### Part 1: Second-Price Auction
+
 ```bash
 python part1_second_price_auction.py
 ```
-*Outputs:* Simulates $N = 100{,}000$ auctions per bid point, performs analytical dominance checks, and saves `part1a_one_rival.png`, `part1b_fixed_rival.png`, and `part1c_two_rivals.png` to `/plots`.
 
-### Run Part 2 (First-Price Auction Simulation):
+This script:
+- Simulates auctions with one and two rival bidders.
+- Evaluates truthful, half-value and random bidding strategies.
+- Tests different valuations for Bidder 1.
+- Verifies truthful bidding against fixed rival bids.
+
+**Generated plots:**
+- `part1a_one_rival.png`
+- `part1b_fixed_rival.png`
+- `part1c_two_rivals.png`
+
+### Part 2: First-Price Auction
+
 ```bash
 python part2_first_price_auction.py
 ```
-*Outputs:* Evaluates deviation factor $k \in [0.1, 2.0]$ across $n \in \{2, 3, 4\}$, verifies the Bayesian Nash Equilibrium peak, measures overpayment frequency and regret margins, and saves `part2_utility.png` and `part2_overpaid.png` to `/plots`.
 
-### Run Part 3 (VCG Mechanism):
+This script:
+- Evaluates bid scaling factors from 0.1 to 2.0.
+- Considers auctions with 2, 3 and 4 bidders.
+- Compares simulated utility with theoretical BNE.
+- Measures winner overpayment and ex-post regret.
+
+**Generated plots:**
+- `part2_utility.png`
+- `part2_overpaid.png`
+
+### Part 3: VCG Mechanism
+
 ```bash
 python part3_vcg_mechanism.py
 ```
-*Outputs:* Computes optimal path $A \to B \to E \to F$, reproduces exact textbook payments ($p_{AB}=4, p_{BE}=2, p_{EF}=3$), and evaluates strategic deviations across $[0.0, 10.0]$ saved in `part3_misreporting.png`.
+
+This script:
+- Finds the minimum-cost path from A to F.
+- Calculates Clarke pivot payments.
+- Tests strategic cost misreporting.
+- Examines changes in path selection and agent utility.
+
+**Generated plot:**
+- `part3_misreporting.png`
 
 ---
 
-## 6. Detailed Experimental Results & Analysis
+## 6. Experimental Results and Analysis
 
-### Part 1: Second-Price Sealed-Bid Auction
+### 6.1 Part 1: Second-Price Auction
 
-#### Part 1A: One Rival Bidder under Three Strategies
-We evaluated Bidder 1 across valuations $v_1 \in \{0.2, 0.5, 0.8\}$ against three rival strategies:
-1. **Truthful:** $b_2 = v_2$
-2. **Half-Value:** $b_2 = v_2 / 2$
-3. **Random Uniform:** $b_2 \sim U[0, 1]$
+The first experiment investigates whether truthful bidding maximizes the expected utility of a bidder in a second-price auction.
 
-| $v_1$ | Rival Strategy | Truthful Utility | Simulated Peak Utility | Peak Bid $b_1$ | Optimal Range (Plateau) |
-|:---:|:---|:---:|:---:|:---:|:---:|
-| **0.2** | Truthful ($b_2 = v_2$) | 0.0200 | 0.0200 | 0.20 | [0.19, 0.21] |
-| **0.2** | Half-Value ($b_2 = v_2/2$) | 0.0398 | 0.0398 | 0.20 | [0.19, 0.21] |
-| **0.2** | Random Uniform | 0.0200 | 0.0200 | 0.20 | [0.19, 0.21] |
-| **0.5** | Truthful ($b_2 = v_2$) | 0.1243 | 0.1243 | 0.50 | [0.49, 0.51] |
-| **0.5** | Half-Value ($b_2 = v_2/2$) | 0.2502 | 0.2502 | 0.50 | **[0.50, 1.00]** |
-| **0.5** | Random Uniform | 0.1249 | 0.1249 | 0.50 | [0.49, 0.51] |
-| **0.8** | Truthful ($b_2 = v_2$) | 0.3181 | 0.3181 | 0.80 | [0.79, 0.81] |
-| **0.8** | Half-Value ($b_2 = v_2/2$) | 0.5501 | 0.5501 | 0.50 | **[0.50, 1.00]** |
-| **0.8** | Random Uniform | 0.3206 | 0.3206 | 0.80 | [0.79, 0.81] |
+We considered three possible valuations for Bidder 1:
 
-**Do these plots help Bidder 1 select its strategy?**
-**Yes, unequivocally.** The plots establish that bidding truthfully ($b_1 = v_1$) is weakly dominant:
-- Under truthful and random rival strategies, the utility curve has a unique strict maximum at $b_1 = v_1$.
-- Under the half-value rival strategy, the rival bids at most $0.5$. For $v_1 = 0.8$, any bid $b_1 \ge 0.5$ wins with certainty, forming an optimal utility plateau over $[0.50, 1.00]$. The truthful bid $b_1 = 0.8$ lies directly on this optimal plateau.
-- Most importantly, Bidder 1 **does not need to know or predict the rival's strategy**; bidding $b_1 = v_1$ is guaranteed to be optimal across all possible rival behaviors.
+`v1 = {0.2, 0.5, 0.8}`
 
-#### Part 1B: Fixed Rival Bid Analytical Verification & General Dominance Proof
+Three rival bidding strategies were evaluated:
 
-##### 1. Empirical Verification on Fixed Grid ($b_2 \in \{0.1, 0.4, 0.9\}$)
-To verify the mechanism under deterministic rival actions, we fixed rival bids at $b_2 \in \{0.1, 0.4, 0.9\}$ across all $v_1 \in \{0.2, 0.5, 0.8\}$, yielding 9 exact configurations:
+1. **Truthful:** The rival bids their actual valuation.
+2. **Half-value:** The rival bids half of their actual valuation.
+3. **Random uniform:** The rival's bid is independently drawn from a uniform distribution over [0, 1].
 
-| $v_1$ | Rival Bid $b_2$ | Condition | Truthful Utility $u(v_1)$ | Max Utility $\max_{b_1} u(b_1)$ | Winning Optimal Bid Range | Truthful Optimal? |
-|:---:|:---:|:---|:---:|:---:|:---:|:---:|
-| **0.2** | 0.1 | $v_1 > b_2$ (Profitable to win) | **0.10** | 0.10 | $b_1 \in (0.10, 1.00]$ | **Yes (Dominant)** |
-| **0.2** | 0.4 | $v_1 < b_2$ (Loss to win) | **0.00** | 0.00 | $b_1 \in [0.00, 0.40)$ | **Yes (Dominant)** |
-| **0.2** | 0.9 | $v_1 < b_2$ (Loss to win) | **0.00** | 0.00 | $b_1 \in [0.00, 0.90)$ | **Yes (Dominant)** |
-| **0.5** | 0.1 | $v_1 > b_2$ (Profitable to win) | **0.40** | 0.40 | $b_1 \in (0.10, 1.00]$ | **Yes (Dominant)** |
-| **0.5** | 0.4 | $v_1 > b_2$ (Profitable to win) | **0.10** | 0.10 | $b_1 \in (0.40, 1.00]$ | **Yes (Dominant)** |
-| **0.5** | 0.9 | $v_1 < b_2$ (Loss to win) | **0.00** | 0.00 | $b_1 \in [0.00, 0.90)$ | **Yes (Dominant)** |
-| **0.8** | 0.1 | $v_1 > b_2$ (Profitable to win) | **0.70** | 0.70 | $b_1 \in (0.10, 1.00]$ | **Yes (Dominant)** |
-| **0.8** | 0.4 | $v_1 > b_2$ (Profitable to win) | **0.40** | 0.40 | $b_1 \in (0.40, 1.00]$ | **Yes (Dominant)** |
-| **0.8** | 0.9 | $v_1 < b_2$ (Loss to win) | **0.00** | 0.00 | $b_1 \in [0.00, 0.90)$ | **Yes (Dominant)** |
+Each candidate bid was evaluated over 100,000 simulated auctions.
 
-In all 9 cases, bidding $b_1 = v_1$ yields the highest possible utility ($u(v_1) = \max_{b_1} u(b_1)$).
+#### 6.1.1 One Rival Bidder
 
-##### 2. General Theoretical Dominance Proof for Every Rival Bid ($b_2 \in [0, \infty)$)
-While the 9-point grid verifies specific test cases, game theory establishes weak dominance across **all possible rival bids** $b_2 \in [0, \infty)$ via three exhaustive cases:
-1. **Case 1: $b_2 < v_1$ (Winning is profitable):**
-   - Truthful bid $b_1 = v_1 > b_2$: Bidder 1 wins and pays $b_2$, achieving strictly positive utility $u(v_1) = v_1 - b_2 > 0$.
-   - Any other bid $b_1' > b_2$ also wins and pays $b_2$, yielding identical utility $v_1 - b_2$.
-   - Any bid $b_1' < b_2$ loses, yielding utility $0 < v_1 - b_2$.
-   - Hence, $u(v_1) \ge u(b_1')$ for all $b_1'$.
-2. **Case 2: $b_2 > v_1$ (Winning causes a loss):**
-   - Truthful bid $b_1 = v_1 < b_2$: Bidder 1 loses, achieving utility $u(v_1) = 0$.
-   - Any other losing bid $b_1' < b_2$ yields utility $0$.
-   - Any winning bid $b_1' > b_2$ forces Bidder 1 to pay $b_2$, resulting in negative utility $u(b_1') = v_1 - b_2 < 0$.
-   - Hence, $u(v_1) \ge u(b_1')$ for all $b_1'$.
-3. **Case 3: $b_2 = v_1$ (Breakeven):**
-   - Any bid $b_1'$ yields utility $0$ (either loses at payoff 0, or wins at price $b_2 = v_1$ with payoff $v_1 - v_1 = 0$).
-   - Hence, $u(v_1) = u(b_1') = 0$.
+We first considered an auction with two bidders, where Bidder 1 competes against one rival.
 
-Therefore, truthful bidding $b_1 = v_1$ is unconditionally weakly dominant for every rival bid $b_2 \in [0, \infty)$.
+![One Rival Bidder](plots/part1a_one_rival.png)
 
-#### Part 1C: Two Rival Bidders (Repeating Parts A and B with Two Rivals)
+**Observations:**
 
-##### 1. Stochastic Rival Strategies (Part A with Two Rivals)
-With two rival bidders (Bidders 2 and 3) adopting identical strategies, Bidder 1 wins if and only if $b_1 > \max(b_2, b_3)$, paying the second price $p = \max(b_2, b_3)$:
-- **Truthful Rivals ($b_2 = v_2, b_3 = v_3$):** Second price distribution is $F_{\max}(x) = x^2$. Truthful bidding $b_1 = v_1$ achieves peak utility (0.0027 for $v_1=0.2$, 0.0417 for $v_1=0.5$, 0.1707 for $v_1=0.8$).
-- **Half-Value Rivals ($b_2 = v_2/2, b_3 = v_3/2$):** Rivals bid at most $0.5$. For $v_1 = 0.8$, Bidder 1 achieves a maximal utility plateau over $[0.50, 1.00]$ ($u \approx 0.3833$), where $b_1 = 0.8$ lies comfortably.
-- **Random Rivals ($b_2, b_3 \sim U[0, 1]$):** Peak utility strictly aligns with $b_1 = v_1$.
+- When the rival bids truthfully or follows a random uniform strategy, maximum utility occurs around Bidder 1's true valuation.
+- When the rival follows a half-value strategy, the utility curve can contain a plateau.
+- Once Bidder 1 bids enough to guarantee winning against the half-value rival, increasing the bid further does not increase utility.
+- Truthful bidding achieves maximum utility across all three rival strategies.
 
-##### 2. Fixed Rival Bid Verification (Part B with Two Rivals)
-To repeat Part B with two rivals, we evaluate Bidder 1's utility against all pairs $(b_2, b_3) \in \{0.1, 0.4, 0.9\}^2$. In a second-price auction, two rivals exert an effective rival bid $p_{\text{rival}} = \max(b_2, b_3)$. Evaluating all 27 combinations ($3$ values of $v_1 \times 9$ pairs of $(b_2, b_3)$):
+#### 6.1.2 Fixed Rival Bid: Analytical Verification
 
-| $v_1$ | Rival Pair $(b_2, b_3)$ | Effective Price $\max(b_2, b_3)$ | Truthful Utility $u(v_1)$ | Max Utility $\max_{b_1} u(b_1)$ | Truthful Optimal? |
-|:---:|:---:|:---:|:---:|:---:|:---:|
-| **0.2** | $(0.1, 0.1)$ | 0.1 | **0.10** | 0.10 | **Yes** |
-| **0.2** | $(0.1, 0.4)$ or $(0.4, 0.1)$ or $(0.4, 0.4)$ | 0.4 | **0.00** | 0.00 | **Yes** |
-| **0.2** | Any pair with 0.9 | 0.9 | **0.00** | 0.00 | **Yes** |
-| **0.5** | $(0.1, 0.1)$ | 0.1 | **0.40** | 0.40 | **Yes** |
-| **0.5** | $(0.1, 0.4)$ or $(0.4, 0.1)$ or $(0.4, 0.4)$ | 0.4 | **0.10** | 0.10 | **Yes** |
-| **0.5** | Any pair with 0.9 | 0.9 | **0.00** | 0.00 | **Yes** |
-| **0.8** | $(0.1, 0.1)$ | 0.1 | **0.70** | 0.70 | **Yes** |
-| **0.8** | $(0.1, 0.4)$ or $(0.4, 0.1)$ or $(0.4, 0.4)$ | 0.4 | **0.40** | 0.40 | **Yes** |
-| **0.8** | Any pair with 0.9 | 0.9 | **0.00** | 0.00 | **Yes** |
+The second experiment considers fixed rival bids instead of randomly generated bids.
 
-In all 27 combinations, $u(v_1) = \max_{b_1} u(b_1)$. Truthful bidding $b_1 = v_1$ is verified to be weakly dominant against any pair of rival bids.
+We considered:
+
+- Bidder 1's valuations: 0.2, 0.5 and 0.8.
+- Rival's fixed bids: 0.1, 0.4 and 0.9.
+
+This produces nine different combinations.
+
+![Fixed Rival Bid](plots/part1b_fixed_rival.png)
+
+**Observations:**
+
+- When Bidder 1's valuation is greater than the rival's bid, winning generates positive utility.
+- When the rival's bid exceeds Bidder 1's valuation, winning generates negative utility.
+- Underbidding may cause Bidder 1 to miss profitable opportunities.
+- Overbidding may cause Bidder 1 to win at an unprofitable price.
+- Truthful bidding achieves maximum utility in all nine combinations.
+
+This confirms that truthful bidding is weakly dominant, although it is not necessarily the only utility-maximizing bid.
+
+#### 6.1.3 Two Rival Bidders
+
+We extended the experiment to three bidders, where Bidder 1 competes against Bidder 2 and Bidder 3.
+
+Both rivals follow the same bidding strategy:
+
+- Truthful bidding.
+- Half-value bidding.
+- Random uniform bidding.
+
+Bidder 1's valuation was again varied across 0.2, 0.5 and 0.8.
+
+![Two Rival Bidders](plots/part1c_two_rivals.png)
+
+**Observations:**
+
+- Introducing another rival increases competition.
+- The probability of winning changes with the bids submitted by both rivals.
+- The expected utility is affected by the highest competing bid.
+- Truthful bidding continues to achieve maximum utility.
+- The results remain consistent with the weak dominance property of second-price auctions.
+
+**Conclusion of Part 1:**
+
+Across different valuations, rival strategies and numbers of bidders, truthful bidding remains a weakly dominant strategy in a second-price auction.
 
 ---
 
-### Part 2: First-Price Sealed-Bid Auction
+### 6.2 Part 2: First-Price Auction
 
-Bidder 1 deviated by bidding $b_1 = k \cdot v_1$ for $k \in [0.1, 2.0]$, while $n-1$ rivals played equilibrium $b^*(v_i) = \frac{n-1}{n} v_i$.
+In a first-price auction, the highest bidder wins and pays their own submitted bid.
 
-| $n$ | Theoretical $k^*$ | Sim Peak $k$ | Theoretical $\mathbb{E}[U]$ | Sim Peak $\mathbb{E}[U]$ | Win % @ BNE | Winner Regret % | Regret Margin |
-|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
-| **2** | 0.500 | 0.500 | 0.16667 ($1/6$) | 0.16600 | 49.8% | **100.0%** | 0.1662 |
-| **3** | 0.667 | 0.650 | 0.08333 ($1/12$) | 0.08328 | 33.1% | **100.0%** | 0.1671 |
-| **4** | 0.750 | 0.750 | 0.05000 ($1/20$) | 0.05001 | 25.0% | **100.0%** | 0.1504 |
+Unlike a second-price auction, bidding one's true valuation is generally not optimal because the winner pays their own bid.
 
-**Overpayment Analysis ("Could the winner have paid less and still won?"):**
-1. **100.0% Frequency (Continuous Bids Without Ties):** Across all $100{,}000$ auctions, in **100.0% of winning auctions**, the winner paid strictly more than the second-highest bid ($b_{(1)} > b_{(2)}$). Since bids are continuous random variables drawn from uniform distributions, exact ties have probability zero ($P(b_{(1)} = b_{(2)}) = 0$). The winner could always ex-post have bid $b_{(2)} + \epsilon$ and still won.
-2. **Crucial Distinction — Overpayment vs. Financial Loss:**
-   > **Note on Terminology:** "Overpaying" in auction theory refers strictly to *ex-post regret*—paying more than the minimum necessary bid to secure the item, thereby leaving surplus on the table. **It does NOT mean the winner suffers a financial loss.**
-   > 
-   > In fact, at the BNE equilibrium $k^* = \frac{n-1}{n} < 1$, the winner's payoff is:
-   > $$u_1 = v_1 - b_1 = v_1 \left(1 - \frac{n-1}{n}\right) = \frac{v_1}{n} > 0 \quad (\forall v_1 > 0)$$
-   > The winner always earns a strictly positive profit. Overpayment is purely an informational externality of the first-price rule compared to the second-price rule.
-3. **Surplus Left on Table:** The average overpayment margin $\mathbb{E}[b_{(1)} - b_{(2)}]$ equals $0.1662$ for $n=2$, $0.1671$ for $n=3$, and decreases to $0.1504$ for $n=4$. As $n$ grows, order statistics crowd closer, reducing the overpayment gap.
+We investigate strategic bid shading using:
 
----
+`b1 = k * v1`
 
-### Part 3: VCG Mechanism for Shortest-Path Procurement
+where `k` is the bid scaling factor.
 
-Using Figure 7.3 from Shoham and Leyton-Brown:
-- Nodes: $\{A, B, C, D, E, F\}$
-- True edge costs: $AB=1, AC=4, BD=1, BE=2, CD=1, DE=1, DF=4, EF=1$.
+The remaining bidders follow the Bayesian Nash Equilibrium (BNE) strategy:
 
-#### 1. Baseline Shortest-Path Tie-Breaking (ABEF vs. ABDEF)
-In the baseline network, there is an exact cost tie between two paths from $A$ to $F$:
-- **Path $ABEF$:** Cost $= 1(AB) + 2(BE) + 1(EF) = 4.0$ (3 edges / 4 nodes)
-- **Path $ABDEF$:** Cost $= 1(AB) + 1(BD) + 1(DE) + 1(EF) = 4.0$ (4 edges / 5 nodes)
+`b_i = ((n - 1) / n) * v_i`
 
-To reproduce the textbook payments ($p_{AB}=4, p_{BE}=2, p_{EF}=3$), the mechanism **must select path $ABEF$**. If $ABDEF$ were selected instead, edge $BE$ would receive payment $0$, violating the textbook result.
+The theoretical equilibrium scaling factor is:
 
-**Deterministic Tie-Breaking Rule Implemented:**
-Our implementation enforces a consistent, deterministic tie-breaking hierarchy:
-1. *Primary:* Minimal total reported path cost
-2. *Secondary:* Minimal hop-count (fewest edges / nodes)
-3. *Tertiary:* Lexicographical node sequence
+`k* = (n - 1) / n`
 
-Because path $ABEF$ has 3 hops while path $ABDEF$ has 4 hops, $ABEF$ is selected deterministically and unconditionally.
+#### 6.2.1 Expected Utility and Equilibrium Verification
 
-#### 2. VCG Payment & Utility Results
+We considered three auction settings:
 
-| Edge $(u, v)$ | True Cost $c_e$ | Reported Cost | Selected on Path? | VCG Payment $p_e$ | Utility $u_e = p_e - c_e$ | Textbook Benchmark |
-|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
-| **(A, B)** | 1.0 | 1.0 | **YES** | **4.00** | 3.00 | **4.0 (Matched ✓)** |
-| **(A, C)** | 4.0 | 4.0 | NO | 0.00 | 0.00 | **0.0 (Matched ✓)** |
-| **(B, D)** | 1.0 | 1.0 | NO | 0.00 | 0.00 | **0.0 (Matched ✓)** |
-| **(B, E)** | 2.0 | 2.0 | **YES** | **2.00** | 0.00 | **2.0 (Matched ✓)** |
-| **(C, D)** | 1.0 | 1.0 | NO | 0.00 | 0.00 | **0.0 (Matched ✓)** |
-| **(D, E)** | 1.0 | 1.0 | NO | 0.00 | 0.00 | **0.0 (Matched ✓)** |
-| **(D, F)** | 4.0 | 4.0 | NO | 0.00 | 0.00 | **0.0 (Matched ✓)** |
-| **(E, F)** | 1.0 | 1.0 | **YES** | **3.00** | 2.00 | **3.0 (Matched ✓)** |
-| **TOTAL** | - | - | - | **9.00** | **5.00** | **All Verified ✓** |
+| Number of Bidders | Theoretical Equilibrium k* |
+|---|---:|
+| 2 | 0.500 |
+| 3 | 0.667 |
+| 4 | 0.750 |
 
-#### 3. Strategic Misreporting Analysis & Tie at $c'(AC) = 1.0$
-We evaluated reported costs from $0.0$ to $10.0$ in steps of $0.5$:
-- **Winning Edge $AB$ (True cost 1.0):** For $c' \in [0.0, 4.0]$, $AB$ remains on path, receiving payment $4.0$ and utility $3.0$. For $c' > 4.0$, path $ACDEF$ (cost 7.0) becomes cheaper; $AB$ is excluded, receiving payment $0.0$ and utility $0.0$. No misreport can exceed utility $3.0$.
-- **Losing Edge $AC$ (True cost 4.0):**
-  - For $c' > 1.0$: Path $ACDEF$ has cost $> 4.0$; $AC$ remains excluded, earning utility $0.0$.
-  - **At Boundary $c'(AC) = 1.0$ (Tie Condition):**
-    Path $ACDEF$ has total cost $1.0(AC) + 1(CD) + 1(DE) + 1(EF) = 4.0$, tying with path $ABEF$ (cost 4.0).
-    - Under our minimal hop-count tie-breaking rule (3 hops for $ABEF$ vs. 4 hops for $ACDEF$), $ABEF$ wins, so $AC$ is excluded ($u_{AC} = 0.0$).
-    - If an alternative tie-breaker selected $ACDEF$, $AC$'s VCG payment would be:
-      $$p_{AC} = d(G \setminus \{AC\}) - [d(G) - c'(AC)] = 4.0 - (4.0 - 1.0) = 1.0$$
-      Because $AC$'s true cost is $4.0$, its utility would be:
-      $$u_{AC} = p_{AC} - c_{AC}^{\text{true}} = 1.0 - 4.0 = -3.0 < 0 \quad (\text{Severe loss of \$3.00})$$
-  - For underreporting $c' < 1.0$: Path $ACDEF$ has cost $c' + 3 < 4.0$, entering the optimal path. However, its payment is strictly capped at $1.0$, resulting in negative utility $u_{AC} = 1.0 - 4.0 = -3.0 < 0$.
-  - **Conclusion:** Under every possible tie-breaking rule, edge $AC$ achieves its maximum utility ($0.0$) by reporting truthfully. Lying to win induces a devastating financial loss.
+Bidder 1's scaling factor was varied from 0.1 to 2.0, and the expected utility was estimated for each value.
 
----
+![First Price Expected Utility](plots/part2_utility.png)
 
-## 7. Computational Complexity & Scalability Analysis
+**Observations:**
 
-| Mechanism Component | Dominant Operation | Time Complexity | Typical Runtime |
-|:---|:---|:---:|:---:|
-| **Part 1 (Second-Price Simulation)** | Vectorized broadcasting over $N$ auctions | $O(\|B\| \cdot N)$ | $\approx 1.2$ s |
-| **Part 2 (First-Price Simulation)** | Row-wise sorting of $N \times n$ bid matrix | $O(\|K\| \cdot N \cdot n \log n)$ | $\approx 2.5$ s |
-| **Part 3 (VCG Mechanism)** | Dijkstra shortest path on $G$ and $G \setminus \{e\}$ | $O(\|P^*\| \cdot (\|E\| + \|V\| \log \|V\|))$ | $\approx 0.05$ s |
+- For two bidders, maximum expected utility occurs around k = 0.5.
+- For three bidders, maximum expected utility occurs around k = 0.667.
+- For four bidders, maximum expected utility occurs around k = 0.75.
+- The simulated utility closely follows the theoretical equilibrium predictions.
+- Bidding below the true valuation provides a balance between winning probability and profit margin.
 
-All algorithms scale polynomially, enabling straightforward extension to large networks and high bidder populations.
+These results experimentally verify the theoretical Bayesian Nash Equilibrium.
+
+#### 6.2.2 Ex-Post Regret and Overpayment Analysis
+
+The next experiment investigates whether the winner could have submitted a lower bid and still won the auction.
+
+Let:
+
+- `b(1)` = Highest bid.
+- `b(2)` = Second-highest bid.
+
+The difference between these bids represents the amount by which the winner could have reduced their bid while still remaining the winner, assuming a sufficiently small positive margin.
+
+The average overpayment margin is:
+
+`R = E[b(1) - b(2)]`
+
+![Overpayment and Regret Analysis](plots/part2_overpaid.png)
+
+**Observations:**
+
+- In continuous-bid auctions, the winner's bid is strictly greater than the second-highest bid with probability 1.
+- Therefore, the winner could have bid slightly less and still won.
+- The average overpayment margin changes with the number of bidders and the scaling factor.
+- The difference between the highest and second-highest bids represents ex-post regret.
+
+An important distinction is that overpayment does not necessarily mean the winner suffers a financial loss. The winner can still obtain positive utility while paying more than the minimum winning bid.
+
+**Conclusion of Part 2:**
+
+The experiments demonstrate that strategic bid shading is optimal in first-price auctions. The simulated results closely match the theoretical BNE for 2, 3 and 4 bidders.
 
 ---
 
-## 8. Limitations & Practical Considerations
+### 6.3 Part 3: VCG Mechanism
 
-1. **Collusion Vulnerability:** VCG is strategyproof against unilateral deviations, but vulnerable to agent coalitions. For example, if edges $AB$ and $AC$ colluded, $AC$ could report cost $100$, driving $AB$'s payment to $100$ and extracting unbounded payments from the buyer.
-2. **High Total Buyer Expenditure:** In Part 3, the buyer pays $\$9.00$ for a path that costs only $\$4.00$ (a 125% premium). Bottleneck links with high market power extract significant information rents.
-3. **NP-Hardness in Combinatorial Allocations:** In general combinatorial auctions with arbitrary package valuations, the winner determination problem is NP-hard, requiring approximation algorithms where exact VCG truthfulness may be sacrificed.
+The final experiment investigates the Vickrey-Clarke-Groves (VCG) mechanism using a shortest-path procurement problem.
+
+Each edge in the network represents an independent agent with a private cost.
+
+The objective is to find the minimum-cost path from source A to destination F.
+
+#### 6.3.1 Network Configuration
+
+The network contains six nodes:
+
+`V = {A, B, C, D, E, F}`
+
+The true edge costs are:
+
+| Edge | True Cost |
+|---|---:|
+| AB | 1 |
+| AC | 4 |
+| BD | 1 |
+| BE | 2 |
+| CD | 1 |
+| DE | 1 |
+| DF | 4 |
+| EF | 1 |
+
+The optimal path selected by the mechanism is:
+
+**A → B → E → F**
+
+Total path cost:
+
+`1 + 2 + 1 = 4`
+
+#### 6.3.2 Clarke Pivot Payments
+
+The mechanism calculates payments based on the externality imposed by each selected edge.
+
+The resulting payments are:
+
+| Edge | True Cost | VCG Payment | Selected |
+|---|---:|---:|---|
+| AB | 1 | 4 | Yes |
+| AC | 4 | 0 | No |
+| BD | 1 | 0 | No |
+| BE | 2 | 2 | Yes |
+| CD | 1 | 0 | No |
+| DE | 1 | 0 | No |
+| DF | 4 | 0 | No |
+| EF | 1 | 3 | Yes |
+| **Total** | | **9** | |
+
+The total payment is 9 units for a path with an actual cost of 4 units.
+
+#### 6.3.3 Strategic Misreporting Analysis
+
+To test the incentive compatibility of the mechanism, we selected two representative edges:
+
+- **AB:** An edge on the optimal path, with true cost 1.
+- **AC:** An edge outside the optimal path, with true cost 4.
+
+The reported cost of each edge was varied from 0.0 to 10.0 in increments of 0.5.
+
+For every reported cost, we examined the resulting path selection, VCG payment and agent utility.
+
+![VCG Misreporting Analysis](plots/part3_misreporting.png)
+
+**Observations:**
+
+**Edge AB (Selected Edge, True Cost = 1):**
+
+- Under truthful reporting, AB is selected and receives a payment of 4.
+- Its utility is 3 (payment minus true cost).
+- Increasing its reported cost eventually causes the edge to be excluded.
+- Once excluded, the agent receives zero utility.
+- No tested misreport provides higher utility than truthful reporting.
+
+**Edge AC (Unselected Edge, True Cost = 4):**
+
+- Under truthful reporting, AC is not selected and receives zero utility.
+- Reporting a sufficiently low cost can cause it to enter the selected path.
+- However, the resulting payment is insufficient to cover its true cost.
+- Its utility becomes negative.
+- Therefore, underreporting does not provide a profitable deviation.
+
+**Conclusion of Part 3:**
+
+The experiments demonstrate that truthful cost reporting maximizes the utility of the tested agents, consistent with the strategyproofness property of the VCG mechanism.
 
 ---
 
-## 9. Conclusions
+## 7. Comparison of Mechanism Properties
 
-1. **Second-Price Auctions:** Truthful bidding is weakly dominant across all rival strategies and valuations, with empirical utility peaking at $b_1 = v_1$.
-2. **First-Price Auctions:** Expected utility peaks at the Bayesian Nash Equilibrium $k^* = (n-1)/n$ across $n \in \{2, 3, 4\}$. In 100% of auctions, the winner overpays relative to the minimum winning bid, demonstrating structural regret.
-3. **VCG Mechanism:** Textbook payments ($p_{AB}=4, p_{BE}=2, p_{EF}=3$) were exactly reproduced. Strategic deviations proved that neither winning nor losing edges can profit by lying, validating strategyproofness and individual rationality.
+| Property | Second-Price Auction | First-Price Auction | VCG Mechanism |
+|---|---|---|---|
+| Winner's payment | Second-highest bid | Own bid | Based on externality |
+| Truthful reporting | Weakly dominant | Generally not optimal | Dominant strategy |
+| Strategic bid shading | Not necessary | Beneficial | Not necessary |
+| Main theoretical concept | Dominant Strategy | Bayesian Nash Equilibrium | Incentive Compatibility |
+| Experimental focus | Utility vs. bid | Utility vs. scaling factor | Utility vs. reported cost |
+
+### Key Takeaways
+
+1. **Second-Price Auction:** Truthful bidding is weakly dominant because the winner pays the highest competing bid rather than their own bid.
+
+2. **First-Price Auction:** Bidders strategically shade their bids below their true valuations to balance their probability of winning against their profit.
+
+3. **VCG Mechanism:** Externality-based payments encourage agents to report their true costs rather than manipulate the allocation.
 
 ---
 
-## 10. References
+## 8. Computational Complexity
 
-1. Y. Shoham and K. Leyton-Brown, *Multiagent Systems: Algorithmic, Game-Theoretic, and Logical Foundations*, Cambridge University Press, 2008.
-2. W. Vickrey, "Counterspeculation, auctions, and competitive sealed tenders," *Journal of Finance*, vol. 16, no. 1, pp. 8–37, 1961.
-3. E. H. Clarke, "Multipart pricing of public goods," *Public Choice*, vol. 11, pp. 17–33, 1971.
-4. T. Groves, "Incentives in teams," *Econometrica*, vol. 41, no. 4, pp. 617–631, 1973.
-5. V. Krishna, *Auction Theory*, Academic Press, 2nd ed., 2009.
-6. N. Nisan, T. Roughgarden, E. Tardos, and V. Vazirani, *Algorithmic Game Theory*, Cambridge University Press, 2007.
+| Component | Dominant Operation | Time Complexity |
+|---|---|---|
+| Part 1: Second-Price Auction | Vectorized simulation over candidate bids | O(B × N) |
+| Part 2: First-Price Auction | Sorting simulated bid matrices | O(K × N × n log n) |
+| Part 3: VCG Mechanism | Repeated shortest-path computation | O(P × (E + V log V)) |
+
+Where:
+
+- N = Number of simulated auctions.
+- B = Number of candidate bids.
+- K = Number of scaling factors.
+- n = Number of bidders.
+- V = Number of vertices in the network.
+- E = Number of edges in the network.
+- P = Number of selected edges.
+
+---
+
+## 9. Limitations and Practical Considerations
+
+1. **Collusion:** VCG is strategyproof against unilateral deviations but is not necessarily resistant to collusion between multiple agents.
+
+2. **High Buyer Expenditure:** In the network procurement experiment, the buyer pays 9 units for a path with a true cost of 4 units. Strategyproofness does not necessarily imply budget efficiency.
+
+3. **Simplified Auction Environment:** The auction simulations assume independent valuations drawn from uniform distributions. Real-world auctions may involve correlated valuations, risk aversion and collusion.
+
+4. **Network Scalability:** The VCG implementation uses repeated shortest-path computations. Larger networks may require more efficient optimization techniques.
+
+5. **Tie-Breaking:** Equal-cost paths may result in different selected allocations. Deterministic tie-breaking is important for reproducibility.
+
+---
+
+## 10. Conclusion
+
+This assignment explored three fundamental mechanisms used in multi-agent systems to handle private information and strategic decision-making.
+
+- **Second-Price Auction:** The experiments verified that truthful bidding is a weakly dominant strategy across different valuations and rival bidding strategies.
+
+- **First-Price Auction:** The simulations demonstrated strategic bid shading and verified the theoretical Bayesian Nash Equilibrium for 2, 3 and 4 bidders.
+
+- **VCG Mechanism:** The implementation reproduced the optimal shortest path and Clarke pivot payments. Strategic misreporting experiments demonstrated the incentive compatibility of the mechanism for the tested agents.
+
+Overall, the experiments connect theoretical concepts in mechanism design with computational simulations and demonstrate how allocation and payment rules influence the behaviour of rational autonomous agents.
+
+---
+
+## 11. References
+
+1. Shoham, Y., and Leyton-Brown, K. (2008). *Multiagent Systems: Algorithmic, Game-Theoretic, and Logical Foundations.* Cambridge University Press.
+
+2. Vickrey, W. (1961). Counterspeculation, Auctions, and Competitive Sealed Tenders. *Journal of Finance*, 16(1), 8–37.
+
+3. Clarke, E. H. (1971). Multipart Pricing of Public Goods. *Public Choice*, 11, 17–33.
+
+4. Groves, T. (1973). Incentives in Teams. *Econometrica*, 41(4), 617–631.
+
+5. Krishna, V. (2009). *Auction Theory*, 2nd Edition. Academic Press.
+
+6. Nisan, N., Roughgarden, T., Tardos, É., and Vazirani, V. V. (2007). *Algorithmic Game Theory.* Cambridge University Press.
+
+---
+
+## 12. Reproducibility
+
+To reproduce the experiments:
+
+1. Clone or download the repository.
+2. Install the required dependencies.
+3. Run each Python script independently.
+4. Check the generated plots in the `plots/` directory.
+5. Compare the results with the experimental figures and observations documented above.
