@@ -75,13 +75,26 @@ def build_graph(cost_dict: dict) -> nx.Graph:
 
 
 def shortest_path_cost(G: nx.Graph, source="A", target="F") -> tuple[list, float]:
-    """Return (shortest_path_nodes, total_path_cost) or (None, inf)."""
+    """
+    Find shortest path from source to target with deterministic tie-breaking:
+      1. Primary key: Minimal total path cost
+      2. Secondary key: Minimal hop-count (fewest edges)
+      3. Tertiary key: Lexicographical node sequence
+
+    This guarantees:
+      - Baseline: ABEF (cost 4.0, 3 hops) is chosen over ABDEF (cost 4.0, 4 hops),
+        faithfully reproducing textbook payments p(AB)=4, p(BE)=2, p(EF)=3.
+      - At misreport c'(AC) = 1.0: ABEF (cost 4.0, 3 hops) beats ACDEF (cost 4.0, 4 hops).
+    """
     try:
-        path = nx.shortest_path(G, source, target, weight="weight")
-        cost = nx.shortest_path_length(G, source, target, weight="weight")
-        return path, float(cost)
+        min_cost = nx.shortest_path_length(G, source, target, weight="weight")
     except nx.NetworkXNoPath:
         return None, float("inf")
+
+    candidates = list(nx.all_shortest_paths(G, source, target, weight="weight"))
+    # Sort candidates deterministically: (hop_count, node_sequence)
+    candidates.sort(key=lambda p: (len(p), p))
+    return candidates[0], float(min_cost)
 
 
 def path_to_edges(path: list) -> list[tuple[str, str]]:
@@ -319,23 +332,35 @@ def print_vcg_table(opt_path: list, d_opt: float, payments: dict, utilities: dic
 
 
 def print_misreporting_summary():
-    """Print analytical breakdown of strategic misreporting incentives."""
+    """Print analytical breakdown of strategic misreporting incentives and tie-breaking."""
     print("=" * 70)
-    print("  STRATEGIC MISREPORTING INCENTIVE ANALYSIS SUMMARY")
+    print("  STRATEGIC MISREPORTING INCENTIVE & TIE-BREAKING ANALYSIS")
     print("=" * 70)
-    print("1. Winning Edge AB (True Cost = 1.0, Truthful Payment = 4.0, Utility = 3.0):")
+    print("1. Baseline Graph Tie-Breaking (ABEF vs ABDEF):")
+    print("   - Both paths ABEF (1+2+1=4.0) and ABDEF (1+1+1+1=4.0) have total cost 4.0.")
+    print("   - Implementation uses deterministic minimal hop-count tie-breaking:")
+    print("     ABEF has 3 edges (4 nodes) vs ABDEF with 4 edges (5 nodes).")
+    print("   - Minimal hop-count selects ABEF, perfectly reproducing textbook payments:")
+    print("     p(AB) = 4, p(BE) = 2, p(EF) = 3, and all other edges = 0.")
+    print("\n2. Winning Edge AB (True Cost = 1.0, Truthful Payment = 4.0, Utility = 3.0):")
     print("   - Reporting c' in [0.0, 4.0]: AB remains on the path.")
     print("     Because payment depends solely on others' costs, payment remains 4.0")
     print("     and utility remains constant at 3.0.")
     print("   - Reporting c' > 4.0: Alternative path ACDEF (cost 7) becomes cheaper.")
     print("     AB is excluded from the path, receiving payment 0.0 and utility 0.0.")
     print("   -> Conclusion: No misreport can increase AB's utility beyond 3.0.")
-    print("\n2. Losing Edge AC (True Cost = 4.0, Truthful Payment = 0.0, Utility = 0.0):")
-    print("   - Reporting c' >= 1.0: AC remains off the optimal path (utility = 0.0).")
+    print("\n3. Losing Edge AC (True Cost = 4.0, Truthful Payment = 0.0, Utility = 0.0):")
+    print("   - Reporting c' > 1.0: Path ACDEF cost > 4.0; AC remains excluded (u = 0.0).")
+    print("   - Reporting c' = 1.0 (Boundary Tie Condition):")
+    print("     Path ACDEF cost = 1.0 + 3 = 4.0, tying with ABEF (cost 4.0).")
+    print("     * Under minimal hop-count tie-breaking (3 hops vs 4 hops), ABEF wins,")
+    print("       so AC is excluded and gets utility 0.0.")
+    print("     * Under an alternative tie-breaker selecting ACDEF, AC's VCG payment is:")
+    print("       p = d(G - {AC}) - [d(G) - c'] = 4.0 - 3.0 = 1.0.")
+    print("       AC's utility would be p - c_true = 1.0 - 4.0 = -3.0 (severe loss!).")
     print("   - Underreporting c' < 1.0: AC enters path ACDEF (cost c' + 3 < 4).")
-    print("     VCG payment is p = d(without AC) - (d(with AC) - c') = 4 - 3 = 1.0.")
-    print("     Because true cost is 4.0, AC's utility = 1.0 - 4.0 = -3.0 (loss!).")
-    print("   -> Conclusion: AC achieves max utility (0.0) by reporting truthfully.")
+    print("     VCG payment is p = 4.0 - 3.0 = 1.0; utility is 1.0 - 4.0 = -3.0 < 0.")
+    print("   -> Conclusion: AC achieves maximum utility (0.0) by reporting truthfully.")
     print("=" * 70 + "\n")
 
 

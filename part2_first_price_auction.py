@@ -12,8 +12,14 @@ Bayesian Nash Equilibrium (BNE) strategy: bi = ((n - 1) / n) * vi.
 Key Metrics Evaluated:
   1. Expected utility of Bidder 1 vs deviation factor k (empirical vs analytical).
   2. Verification that k* = (n - 1) / n maximises expected utility.
-  3. Fraction of auctions where the winner could have paid less and still won.
-  4. Average overpayment margin (money left on the table / winner's regret).
+  3. Fraction of auctions where the winner could have paid less and still won:
+     NOTE ON OVERPAYMENT:
+     In auction theory, 'overpayment' refers strictly to ex-post regret—the winner
+     paying more than the minimum necessary bid (i.e. b_(1) > b_(2))—leaving
+     money on the table. It does NOT mean the winner makes a financial loss.
+     At equilibrium k* = (n-1)/n < 1, the winner always earns a strictly positive
+     surplus u = v1 - b1 = v1*(1 - k*) > 0 for any v1 > 0.
+  4. Average overpayment margin (winner's regret: b_(1) - b_(2)).
 """
 
 import os
@@ -55,7 +61,10 @@ def theoretical_utility(k: float, n: int) -> float:
 
 
 def simulate_first_price(n: int, k: float) -> dict:
-    """Simulate NUM_AUCTIONS auctions for given n and deviation factor k."""
+    """
+    Simulate NUM_AUCTIONS auctions for given n and deviation factor k.
+    Measures expected utility, win probability, and overpayment metrics.
+    """
     eq_factor = (n - 1) / n
 
     v1 = np.random.uniform(0.0, 1.0, NUM_AUCTIONS)
@@ -76,6 +85,7 @@ def simulate_first_price(n: int, k: float) -> dict:
 
     num_wins = int(win_mask.sum())
     if num_wins > 0:
+        # Overpaid if b1 > max_rival (could have reduced bid to max_rival + epsilon)
         overpaid_b1 = (b1[win_mask] > max_rival[win_mask]).sum()
         frac_b1_overpaid = float(overpaid_b1 / num_wins)
         regret_b1 = float((b1[win_mask] - max_rival[win_mask]).mean())
@@ -88,6 +98,7 @@ def simulate_first_price(n: int, k: float) -> dict:
     highest_bid = sorted_all_bids[:, -1]
     second_highest_bid = sorted_all_bids[:, -2]
 
+    # Fraction where winner paid strictly more than second-highest bid
     overall_could_pay_less = (highest_bid > second_highest_bid).mean()
     overall_regret = float((highest_bid - second_highest_bid).mean())
 
@@ -147,7 +158,7 @@ def run_experiment():
         print(f"  n={n}: Simulated peak at k = {best_k:.4f} (u = {best_u:.5f}) | "
               f"BNE k = {eq_k:.4f} (u = {eq_u:.5f})")
         print(f"  Fraction of auctions winner could have paid less: {results[n]['op_all'][eq_idx]*100:.2f}%")
-        print(f"  Average overpayment margin at BNE: {results[n]['regret_all'][eq_idx]:.4f}")
+        print(f"  Average overpayment margin at BNE (b_(1) - b_(2)): {results[n]['regret_all'][eq_idx]:.4f}")
 
     return results
 
@@ -200,7 +211,7 @@ def plot_overpaid(results: dict):
     """Plot overpayment metrics: fraction and regret amount."""
     fig, axes = plt.subplots(2, 3, figsize=(16, 8.5))
     fig.suptitle("Part 2: Analysis of 'Winner Could Have Paid Less and Still Won'\n"
-                 "Ex-Post Regret and Overpayment in First-Price Auctions",
+                 "Structural Overpayment (Paying > 2nd bid) and Regret Margin in First-Price Auctions",
                  fontsize=13, fontweight="bold", y=0.99)
 
     for col_idx, n in enumerate(N_VALUES):
@@ -213,7 +224,7 @@ def plot_overpaid(results: dict):
         ax_top.plot(k_vals, results[n]["op_b1"], "^--", color="#d62728", markersize=3.5, linewidth=1.5,
                     label="Bidder 1 (given win)")
         ax_top.axvline(eq_k, color="black", linestyle="-.", linewidth=1.4, label=f"BNE $k={eq_k:.3f}$")
-        ax_top.set_title(f"$n = {n}$: Fraction Winner Could Pay Less", fontsize=10.5, fontweight="bold")
+        ax_top.set_title(f"$n = {n}$: Fraction Winner Paid > 2nd Bid", fontsize=10.5, fontweight="bold")
         ax_top.set_xlabel("Scaling Factor $k$", fontsize=9)
         ax_top.set_ylabel("Fraction (1.0 = 100%)", fontsize=9)
         ax_top.set_ylim(0.95, 1.02)
@@ -226,7 +237,7 @@ def plot_overpaid(results: dict):
         ax_bot.plot(k_vals, results[n]["regret_b1"], "o--", color="#e377c2", markersize=3.5, linewidth=1.5,
                     label="Bidder 1 $\\mathbb{E}[b_1 - b_{rival}^{max} \\mid \\mathrm{win}]$")
         ax_bot.axvline(eq_k, color="black", linestyle="-.", linewidth=1.4, label=f"BNE $k={eq_k:.3f}$")
-        ax_bot.set_title(f"$n = {n}$: Average Overpayment Margin (Regret)", fontsize=10.5, fontweight="bold")
+        ax_bot.set_title(f"$n = {n}$: Overpayment Margin $\\mathbb{E}[b_{(1)} - b_{(2)}]$", fontsize=10.5, fontweight="bold")
         ax_bot.set_xlabel("Scaling Factor $k$", fontsize=9)
         ax_bot.set_ylabel("Money Left on Table ($b_{win} - b_{second}$)", fontsize=9)
         ax_bot.legend(fontsize=7.5, loc="upper left")
@@ -241,11 +252,11 @@ def plot_overpaid(results: dict):
 
 def print_summary(results: dict):
     """Print academic-grade summary table of Part 2 results."""
-    print("\n" + "=" * 76)
+    print("\n" + "=" * 80)
     print("  PART 2: FIRST-PRICE AUCTION EQUILIBRIUM & OVERPAYMENT SUMMARY")
-    print("=" * 76)
+    print("=" * 80)
     print(f"{'n':<4} {'BNE k*':<8} {'Sim Peak k':<11} {'BNE Utility':<13} {'Peak Utility':<13} {'Win % @ BNE':<12} {'Overpayment'}")
-    print("-" * 76)
+    print("-" * 80)
     for n in N_VALUES:
         k_vals = results[n]["k_grid"]
         eq_k = results[n]["eq_k"]
@@ -260,10 +271,13 @@ def print_summary(results: dict):
         regret = results[n]["regret_all"][eq_idx]
 
         print(f"{n:<4} {bne_k:<8.3f} {peak_k:<11.3f} {bne_u:<13.5f} {peak_u:<13.5f} {win_p:<11.1f}% {regret:.4f}")
-    print("=" * 76)
-    print("Key Finding: In 100.0% of winning auctions, the winner pays strictly more")
-    print("than the second-highest bid, demonstrating structural overpayment.")
-    print("=" * 76 + "\n")
+    print("=" * 80)
+    print("CRITICAL CLARIFICATION ON OVERPAYMENT:")
+    print("  • The 100.0% overpayment result means the winner pays strictly more than the")
+    print("    second-highest bid (b_(1) > b_(2)) due to continuous distributions without ties.")
+    print("  • This represents money left on the table (ex-post regret), NOT that the winner")
+    print("    makes a loss. At equilibrium k* = (n-1)/n < 1, the winner earns positive surplus.")
+    print("=" * 80 + "\n")
 
 
 # ---------------------------------------------------------------------------

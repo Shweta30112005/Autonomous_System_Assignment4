@@ -248,14 +248,67 @@ We evaluated Bidder 1 across valuations $v_1 \in \{0.2, 0.5, 0.8\}$ against thre
 - Under the half-value rival strategy, the rival bids at most $0.5$. For $v_1 = 0.8$, any bid $b_1 \ge 0.5$ wins with certainty, forming an optimal utility plateau over $[0.50, 1.00]$. The truthful bid $b_1 = 0.8$ lies directly on this optimal plateau.
 - Most importantly, Bidder 1 **does not need to know or predict the rival's strategy**; bidding $b_1 = v_1$ is guaranteed to be optimal across all possible rival behaviors.
 
-#### Part 1B: Fixed Rival Bid Analytical Verification
-Rival bids were fixed at $b_2 \in \{0.1, 0.4, 0.9\}$. Analytical step-function evaluation confirmed:
-- When $v_1 > b_2$: Winning is profitable. Bidding $b_1 > b_2$ (including $b_1 = v_1$) secures maximum surplus $v_1 - b_2$. Bidding $b_1 < b_2$ yields 0.
-- When $v_1 < b_2$: Winning causes a loss. Bidding $b_1 < b_2$ (including $b_1 = v_1$) avoids losses (utility 0). Bidding $b_1 > b_2$ causes negative utility $v_1 - b_2 < 0$.
-- In all 9 cases, $u(v_1) = \max_{b_1} u(b_1)$, confirming weak dominance.
+#### Part 1B: Fixed Rival Bid Analytical Verification & General Dominance Proof
 
-#### Part 1C: Two Rival Bidders
-With two rival bidders (Bidders 2 and 3), Bidder 1 wins iff $b_1 > \max(b_2, b_3)$, paying $\max(b_2, b_3)$. Truthful bidding remains strictly weakly dominant. Due to first-order stochastic dominance of $\max(b_2, b_3)$ over $b_2$, Bidder 1's expected utility is lower than with one rival, capturing intensified competition.
+##### 1. Empirical Verification on Fixed Grid ($b_2 \in \{0.1, 0.4, 0.9\}$)
+To verify the mechanism under deterministic rival actions, we fixed rival bids at $b_2 \in \{0.1, 0.4, 0.9\}$ across all $v_1 \in \{0.2, 0.5, 0.8\}$, yielding 9 exact configurations:
+
+| $v_1$ | Rival Bid $b_2$ | Condition | Truthful Utility $u(v_1)$ | Max Utility $\max_{b_1} u(b_1)$ | Winning Optimal Bid Range | Truthful Optimal? |
+|:---:|:---:|:---|:---:|:---:|:---:|:---:|
+| **0.2** | 0.1 | $v_1 > b_2$ (Profitable to win) | **0.10** | 0.10 | $b_1 \in (0.10, 1.00]$ | **Yes (Dominant)** |
+| **0.2** | 0.4 | $v_1 < b_2$ (Loss to win) | **0.00** | 0.00 | $b_1 \in [0.00, 0.40)$ | **Yes (Dominant)** |
+| **0.2** | 0.9 | $v_1 < b_2$ (Loss to win) | **0.00** | 0.00 | $b_1 \in [0.00, 0.90)$ | **Yes (Dominant)** |
+| **0.5** | 0.1 | $v_1 > b_2$ (Profitable to win) | **0.40** | 0.40 | $b_1 \in (0.10, 1.00]$ | **Yes (Dominant)** |
+| **0.5** | 0.4 | $v_1 > b_2$ (Profitable to win) | **0.10** | 0.10 | $b_1 \in (0.40, 1.00]$ | **Yes (Dominant)** |
+| **0.5** | 0.9 | $v_1 < b_2$ (Loss to win) | **0.00** | 0.00 | $b_1 \in [0.00, 0.90)$ | **Yes (Dominant)** |
+| **0.8** | 0.1 | $v_1 > b_2$ (Profitable to win) | **0.70** | 0.70 | $b_1 \in (0.10, 1.00]$ | **Yes (Dominant)** |
+| **0.8** | 0.4 | $v_1 > b_2$ (Profitable to win) | **0.40** | 0.40 | $b_1 \in (0.40, 1.00]$ | **Yes (Dominant)** |
+| **0.8** | 0.9 | $v_1 < b_2$ (Loss to win) | **0.00** | 0.00 | $b_1 \in [0.00, 0.90)$ | **Yes (Dominant)** |
+
+In all 9 cases, bidding $b_1 = v_1$ yields the highest possible utility ($u(v_1) = \max_{b_1} u(b_1)$).
+
+##### 2. General Theoretical Dominance Proof for Every Rival Bid ($b_2 \in [0, \infty)$)
+While the 9-point grid verifies specific test cases, game theory establishes weak dominance across **all possible rival bids** $b_2 \in [0, \infty)$ via three exhaustive cases:
+1. **Case 1: $b_2 < v_1$ (Winning is profitable):**
+   - Truthful bid $b_1 = v_1 > b_2$: Bidder 1 wins and pays $b_2$, achieving strictly positive utility $u(v_1) = v_1 - b_2 > 0$.
+   - Any other bid $b_1' > b_2$ also wins and pays $b_2$, yielding identical utility $v_1 - b_2$.
+   - Any bid $b_1' < b_2$ loses, yielding utility $0 < v_1 - b_2$.
+   - Hence, $u(v_1) \ge u(b_1')$ for all $b_1'$.
+2. **Case 2: $b_2 > v_1$ (Winning causes a loss):**
+   - Truthful bid $b_1 = v_1 < b_2$: Bidder 1 loses, achieving utility $u(v_1) = 0$.
+   - Any other losing bid $b_1' < b_2$ yields utility $0$.
+   - Any winning bid $b_1' > b_2$ forces Bidder 1 to pay $b_2$, resulting in negative utility $u(b_1') = v_1 - b_2 < 0$.
+   - Hence, $u(v_1) \ge u(b_1')$ for all $b_1'$.
+3. **Case 3: $b_2 = v_1$ (Breakeven):**
+   - Any bid $b_1'$ yields utility $0$ (either loses at payoff 0, or wins at price $b_2 = v_1$ with payoff $v_1 - v_1 = 0$).
+   - Hence, $u(v_1) = u(b_1') = 0$.
+
+Therefore, truthful bidding $b_1 = v_1$ is unconditionally weakly dominant for every rival bid $b_2 \in [0, \infty)$.
+
+#### Part 1C: Two Rival Bidders (Repeating Parts A and B with Two Rivals)
+
+##### 1. Stochastic Rival Strategies (Part A with Two Rivals)
+With two rival bidders (Bidders 2 and 3) adopting identical strategies, Bidder 1 wins if and only if $b_1 > \max(b_2, b_3)$, paying the second price $p = \max(b_2, b_3)$:
+- **Truthful Rivals ($b_2 = v_2, b_3 = v_3$):** Second price distribution is $F_{\max}(x) = x^2$. Truthful bidding $b_1 = v_1$ achieves peak utility (0.0027 for $v_1=0.2$, 0.0417 for $v_1=0.5$, 0.1707 for $v_1=0.8$).
+- **Half-Value Rivals ($b_2 = v_2/2, b_3 = v_3/2$):** Rivals bid at most $0.5$. For $v_1 = 0.8$, Bidder 1 achieves a maximal utility plateau over $[0.50, 1.00]$ ($u \approx 0.3833$), where $b_1 = 0.8$ lies comfortably.
+- **Random Rivals ($b_2, b_3 \sim U[0, 1]$):** Peak utility strictly aligns with $b_1 = v_1$.
+
+##### 2. Fixed Rival Bid Verification (Part B with Two Rivals)
+To repeat Part B with two rivals, we evaluate Bidder 1's utility against all pairs $(b_2, b_3) \in \{0.1, 0.4, 0.9\}^2$. In a second-price auction, two rivals exert an effective rival bid $p_{\text{rival}} = \max(b_2, b_3)$. Evaluating all 27 combinations ($3$ values of $v_1 \times 9$ pairs of $(b_2, b_3)$):
+
+| $v_1$ | Rival Pair $(b_2, b_3)$ | Effective Price $\max(b_2, b_3)$ | Truthful Utility $u(v_1)$ | Max Utility $\max_{b_1} u(b_1)$ | Truthful Optimal? |
+|:---:|:---:|:---:|:---:|:---:|:---:|
+| **0.2** | $(0.1, 0.1)$ | 0.1 | **0.10** | 0.10 | **Yes** |
+| **0.2** | $(0.1, 0.4)$ or $(0.4, 0.1)$ or $(0.4, 0.4)$ | 0.4 | **0.00** | 0.00 | **Yes** |
+| **0.2** | Any pair with 0.9 | 0.9 | **0.00** | 0.00 | **Yes** |
+| **0.5** | $(0.1, 0.1)$ | 0.1 | **0.40** | 0.40 | **Yes** |
+| **0.5** | $(0.1, 0.4)$ or $(0.4, 0.1)$ or $(0.4, 0.4)$ | 0.4 | **0.10** | 0.10 | **Yes** |
+| **0.5** | Any pair with 0.9 | 0.9 | **0.00** | 0.00 | **Yes** |
+| **0.8** | $(0.1, 0.1)$ | 0.1 | **0.70** | 0.70 | **Yes** |
+| **0.8** | $(0.1, 0.4)$ or $(0.4, 0.1)$ or $(0.4, 0.4)$ | 0.4 | **0.40** | 0.40 | **Yes** |
+| **0.8** | Any pair with 0.9 | 0.9 | **0.00** | 0.00 | **Yes** |
+
+In all 27 combinations, $u(v_1) = \max_{b_1} u(b_1)$. Truthful bidding $b_1 = v_1$ is verified to be weakly dominant against any pair of rival bids.
 
 ---
 
@@ -270,8 +323,14 @@ Bidder 1 deviated by bidding $b_1 = k \cdot v_1$ for $k \in [0.1, 2.0]$, while $
 | **4** | 0.750 | 0.750 | 0.05000 ($1/20$) | 0.05001 | 25.0% | **100.0%** | 0.1504 |
 
 **Overpayment Analysis ("Could the winner have paid less and still won?"):**
-1. **100.0% Frequency:** Across all $100{,}000$ auctions, in **100.0% of winning auctions**, the winner paid strictly more than the second-highest bid ($b_{(1)} > b_{(2)}$). Since bids are continuous random variables, exact ties have measure zero. The winner could always have bid $b_{(2)} + \epsilon$ and still won.
-2. **Surplus Left on Table:** The average overpayment margin $\mathbb{E}[b_{(1)} - b_{(2)}]$ equals $0.1662$ for $n=2$, $0.1671$ for $n=3$, and decreases to $0.1504$ for $n=4$. As $n$ grows, order statistics crowd closer, reducing overpayment.
+1. **100.0% Frequency (Continuous Bids Without Ties):** Across all $100{,}000$ auctions, in **100.0% of winning auctions**, the winner paid strictly more than the second-highest bid ($b_{(1)} > b_{(2)}$). Since bids are continuous random variables drawn from uniform distributions, exact ties have probability zero ($P(b_{(1)} = b_{(2)}) = 0$). The winner could always ex-post have bid $b_{(2)} + \epsilon$ and still won.
+2. **Crucial Distinction — Overpayment vs. Financial Loss:**
+   > **Note on Terminology:** "Overpaying" in auction theory refers strictly to *ex-post regret*—paying more than the minimum necessary bid to secure the item, thereby leaving surplus on the table. **It does NOT mean the winner suffers a financial loss.**
+   > 
+   > In fact, at the BNE equilibrium $k^* = \frac{n-1}{n} < 1$, the winner's payoff is:
+   > $$u_1 = v_1 - b_1 = v_1 \left(1 - \frac{n-1}{n}\right) = \frac{v_1}{n} > 0 \quad (\forall v_1 > 0)$$
+   > The winner always earns a strictly positive profit. Overpayment is purely an informational externality of the first-price rule compared to the second-price rule.
+3. **Surplus Left on Table:** The average overpayment margin $\mathbb{E}[b_{(1)} - b_{(2)}]$ equals $0.1662$ for $n=2$, $0.1671$ for $n=3$, and decreases to $0.1504$ for $n=4$. As $n$ grows, order statistics crowd closer, reducing the overpayment gap.
 
 ---
 
@@ -281,7 +340,22 @@ Using Figure 7.3 from Shoham and Leyton-Brown:
 - Nodes: $\{A, B, C, D, E, F\}$
 - True edge costs: $AB=1, AC=4, BD=1, BE=2, CD=1, DE=1, DF=4, EF=1$.
 
-#### VCG Payment & Utility Results
+#### 1. Baseline Shortest-Path Tie-Breaking (ABEF vs. ABDEF)
+In the baseline network, there is an exact cost tie between two paths from $A$ to $F$:
+- **Path $ABEF$:** Cost $= 1(AB) + 2(BE) + 1(EF) = 4.0$ (3 edges / 4 nodes)
+- **Path $ABDEF$:** Cost $= 1(AB) + 1(BD) + 1(DE) + 1(EF) = 4.0$ (4 edges / 5 nodes)
+
+To reproduce the textbook payments ($p_{AB}=4, p_{BE}=2, p_{EF}=3$), the mechanism **must select path $ABEF$**. If $ABDEF$ were selected instead, edge $BE$ would receive payment $0$, violating the textbook result.
+
+**Deterministic Tie-Breaking Rule Implemented:**
+Our implementation enforces a consistent, deterministic tie-breaking hierarchy:
+1. *Primary:* Minimal total reported path cost
+2. *Secondary:* Minimal hop-count (fewest edges / nodes)
+3. *Tertiary:* Lexicographical node sequence
+
+Because path $ABEF$ has 3 hops while path $ABDEF$ has 4 hops, $ABEF$ is selected deterministically and unconditionally.
+
+#### 2. VCG Payment & Utility Results
 
 | Edge $(u, v)$ | True Cost $c_e$ | Reported Cost | Selected on Path? | VCG Payment $p_e$ | Utility $u_e = p_e - c_e$ | Textbook Benchmark |
 |:---:|:---:|:---:|:---:|:---:|:---:|:---:|
@@ -295,11 +369,20 @@ Using Figure 7.3 from Shoham and Leyton-Brown:
 | **(E, F)** | 1.0 | 1.0 | **YES** | **3.00** | 2.00 | **3.0 (Matched ✓)** |
 | **TOTAL** | - | - | - | **9.00** | **5.00** | **All Verified ✓** |
 
-#### Strategic Misreporting Analysis
+#### 3. Strategic Misreporting Analysis & Tie at $c'(AC) = 1.0$
 We evaluated reported costs from $0.0$ to $10.0$ in steps of $0.5$:
-- **Winning Edge $AB$ (True cost 1.0):** For $c' \le 4.0$, $AB$ remains on path, receiving payment $4.0$ (utility $3.0$). For $c' > 4.0$, path $ACDEF$ (cost 7.0) becomes cheaper; $AB$ is excluded, receiving payment $0.0$ and utility $0.0$. No misreport can exceed utility $3.0$.
-- **Losing Edge $AC$ (True cost 4.0):** For $c' \ge 1.0$, $AC$ remains excluded (utility $0.0$). If $AC$ underreports $c' < 1.0$, it enters path $ACDEF$ and receives payment $1.0$. However, its true cost is $4.0$, yielding utility $1.0 - 4.0 = -3.0 < 0$ (a loss of $\$3.00$!). Underreporting is strictly penalizing.
-- Thus, truthful reporting is dominant for both winning and losing agents.
+- **Winning Edge $AB$ (True cost 1.0):** For $c' \in [0.0, 4.0]$, $AB$ remains on path, receiving payment $4.0$ and utility $3.0$. For $c' > 4.0$, path $ACDEF$ (cost 7.0) becomes cheaper; $AB$ is excluded, receiving payment $0.0$ and utility $0.0$. No misreport can exceed utility $3.0$.
+- **Losing Edge $AC$ (True cost 4.0):**
+  - For $c' > 1.0$: Path $ACDEF$ has cost $> 4.0$; $AC$ remains excluded, earning utility $0.0$.
+  - **At Boundary $c'(AC) = 1.0$ (Tie Condition):**
+    Path $ACDEF$ has total cost $1.0(AC) + 1(CD) + 1(DE) + 1(EF) = 4.0$, tying with path $ABEF$ (cost 4.0).
+    - Under our minimal hop-count tie-breaking rule (3 hops for $ABEF$ vs. 4 hops for $ACDEF$), $ABEF$ wins, so $AC$ is excluded ($u_{AC} = 0.0$).
+    - If an alternative tie-breaker selected $ACDEF$, $AC$'s VCG payment would be:
+      $$p_{AC} = d(G \setminus \{AC\}) - [d(G) - c'(AC)] = 4.0 - (4.0 - 1.0) = 1.0$$
+      Because $AC$'s true cost is $4.0$, its utility would be:
+      $$u_{AC} = p_{AC} - c_{AC}^{\text{true}} = 1.0 - 4.0 = -3.0 < 0 \quad (\text{Severe loss of \$3.00})$$
+  - For underreporting $c' < 1.0$: Path $ACDEF$ has cost $c' + 3 < 4.0$, entering the optimal path. However, its payment is strictly capped at $1.0$, resulting in negative utility $u_{AC} = 1.0 - 4.0 = -3.0 < 0$.
+  - **Conclusion:** Under every possible tie-breaking rule, edge $AC$ achieves its maximum utility ($0.0$) by reporting truthfully. Lying to win induces a devastating financial loss.
 
 ---
 

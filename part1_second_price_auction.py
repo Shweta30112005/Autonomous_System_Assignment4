@@ -1,6 +1,6 @@
 """
-Part 1: Second-Price Sealed-Bid (Vickrey) Auction Simulation
-============================================================
+Part 1: Second-Price Sealed-Bid (Vickrey) Auction Simulation & Verification
+===========================================================================
 Autonomous Systems - Assignment 4
 Authors: Akanksha Singh (B23CM1005), Shweta Mandal (B23CM1037)
 
@@ -9,8 +9,10 @@ nature of truthful bidding under diverse rival strategies and valuations.
 
 Sections:
   A - One rival bidder with three strategies (Truthful, Half-Value, Random Uniform)
-  B - Fixed rival bid analytical verification (b2 in {0.1, 0.4, 0.9})
-  C - Two rival bidders (Bidder 2 and Bidder 3) with three strategies
+  B - Fixed rival bid verification (b2 in {0.1, 0.4, 0.9}) AND general theoretical proof
+  C - Two rival bidders (Bidders 2 and 3):
+      C.1 - Stochastic rival strategies (Part A repeated with 2 rivals)
+      C.2 - Fixed rival bid verification (Part B repeated with 2 rivals)
 """
 
 import os
@@ -135,7 +137,7 @@ def part_a():
 
 
 # ---------------------------------------------------------------------------
-# Part B: Fixed Rival Bid Analytical Verification
+# Part B: Fixed Rival Bid Analytical Verification & General Dominance Proof
 # ---------------------------------------------------------------------------
 
 def compute_fixed_rival_utility(v1: float, fixed_b2: float) -> np.ndarray:
@@ -146,7 +148,7 @@ def compute_fixed_rival_utility(v1: float, fixed_b2: float) -> np.ndarray:
 
 
 def part_b():
-    """Execute Part B: verify b1 = v1 gives highest utility in all fixed cases."""
+    """Execute Part B: verify b1 = v1 gives highest utility in all fixed cases and state proof."""
     ensure_plots_dir()
     fig, axes = plt.subplots(3, 3, figsize=(15, 12), sharey=False)
     fig.suptitle(
@@ -196,6 +198,25 @@ def part_b():
     plt.close()
     print(f"  Saved plot: {out_path}")
 
+    # General Theoretical Argument for Dominance across EVERY rival bid b2:
+    print("\n--- Part 1B: General Theoretical Dominance Proof ---")
+    print("Theorem: For ANY valuation v1 and ANY rival bid b2 in [0, inf), bidding b1 = v1 is weakly dominant.")
+    print("Proof by case partition over rival bid b2:")
+    print("  1. Case b2 < v1:")
+    print("     - Truthful bid b1 = v1 > b2: Bidder 1 wins and pays b2, yielding u = v1 - b2 > 0.")
+    print("     - Any other winning bid b1' > b2 yields identical utility v1 - b2.")
+    print("     - Any losing bid b1' <= b2 yields utility 0 <= v1 - b2.")
+    print("     => u(v1) >= u(b1') for all b1'.")
+    print("  2. Case b2 > v1:")
+    print("     - Truthful bid b1 = v1 < b2: Bidder 1 loses, yielding u = 0.")
+    print("     - Any other losing bid b1' < b2 yields utility 0.")
+    print("     - Any winning bid b1' > b2 yields negative utility v1 - b2 < 0.")
+    print("     => u(v1) >= u(b1') for all b1'.")
+    print("  3. Case b2 = v1:")
+    print("     - Any bid b1' yields utility 0 (either loses at 0 or wins at price v1).")
+    print("     => u(v1) = u(b1') = 0.")
+    print("Conclusion: Truthful bidding is weakly dominant for EVERY possible rival bid b2.")
+
 
 # ---------------------------------------------------------------------------
 # Part C: Two Rival Bidders (Bidder 2 and Bidder 3)
@@ -230,7 +251,7 @@ def simulate_two_rivals(v1: float, strategy_idx: int) -> np.ndarray:
 
 
 def part_c():
-    """Execute Part C: Two rival bidders under stochastic strategies."""
+    """Execute Part C.1: Two rival bidders under stochastic strategies (Part A with 2 rivals)."""
     ensure_plots_dir()
     fig, axes = plt.subplots(3, 3, figsize=(15, 12), sharey=False)
     fig.suptitle(
@@ -239,7 +260,7 @@ def part_c():
         fontsize=14, fontweight="bold", y=0.99
     )
 
-    print("\n--- Part 1C: Two Rival Bidders Analysis ---")
+    print("\n--- Part 1C: Two Rival Bidders Analysis (Stochastic Strategies) ---")
     for row, v1 in enumerate(V1_VALUES):
         for col, strat_name in enumerate(RIVAL_STRATEGIES):
             ax = axes[row][col]
@@ -285,6 +306,40 @@ def part_c():
     print(f"  Saved plot: {out_path}")
 
 
+def part_c_fixed_verification():
+    """
+    Part C.2: Fixed-bid verification with two rivals (Part B repeated with 2 rivals).
+    Verifies that for fixed rival bid pairs (b2, b3), bidding b1 = v1 remains weakly dominant.
+    """
+    print("\n--- Part 1C: Two Rival Bidders Fixed-Bid Verification (Part B with 2 Rivals) ---")
+    print(f"{'v1':<6} {'(b2, b3)':<12} {'max(b2,b3)':<12} {'u(truthful)':<14} {'max_u':<10} {'Truthful Optimal?'}")
+    print("-" * 68)
+
+    # Pairs of rival bids from {0.1, 0.4, 0.9}
+    rival_pairs = [
+        (0.1, 0.1), (0.1, 0.4), (0.1, 0.9),
+        (0.4, 0.1), (0.4, 0.4), (0.4, 0.9),
+        (0.9, 0.1), (0.9, 0.4), (0.9, 0.9)
+    ]
+
+    all_optimal = True
+    for v1 in V1_VALUES:
+        for b2, b3 in rival_pairs:
+            eff_price = max(b2, b3)
+            utils = compute_fixed_rival_utility(v1, eff_price)
+            truthful_idx = int(round(v1 * 100))
+            u_truthful = utils[truthful_idx]
+            max_u = np.max(utils)
+            is_opt = np.isclose(u_truthful, max_u, atol=1e-9)
+            if not is_opt:
+                all_optimal = False
+            pair_str = f"({b2:.1f}, {b3:.1f})"
+            print(f"{v1:<6.1f} {pair_str:<12} {eff_price:<12.1f} {u_truthful:<14.4f} {max_u:<10.4f} {is_opt}")
+
+    print("-" * 68)
+    print(f"Result: Truthful bidding b1 = v1 is weakly dominant in all 2-rival fixed configurations: {all_optimal}\n")
+
+
 # ---------------------------------------------------------------------------
 # Main Execution
 # ---------------------------------------------------------------------------
@@ -297,11 +352,14 @@ def main():
     print("\n[Running Part 1A — One Rival Bidder (100,000 auctions / point)]")
     part_a()
 
-    print("\n[Running Part 1B — Fixed Rival Bid Analytical Verification]")
+    print("\n[Running Part 1B — Fixed Rival Bid Analytical Verification & Proof]")
     part_b()
 
-    print("\n[Running Part 1C — Two Rival Bidders (100,000 auctions / point)]")
+    print("\n[Running Part 1C.1 — Two Rival Bidders Stochastic Strategies (Part A with 2 Rivals)]")
     part_c()
+
+    print("\n[Running Part 1C.2 — Two Rival Bidders Fixed-Bid Verification (Part B with 2 Rivals)]")
+    part_c_fixed_verification()
 
     print("\n" + "=" * 70)
     print("Part 1 complete. Plots saved:")
